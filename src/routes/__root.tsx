@@ -80,12 +80,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lava Thru — Sistema de Gestão" },
+      { title: "Dashboard — Lava Thru" },
       { name: "description", content: "Plataforma multi-tenant para franquias e franqueados Lava Thru Car Wash: operação, assinaturas, clientes e financeiro." },
-      { property: "og:title", content: "Lava Thru — Sistema de Gestão" },
-      { property: "og:description", content: "Gestão completa para franquias Lava Thru Car Wash." },
+      { property: "og:title", content: "Dashboard — Lava Thru" },
+      { property: "og:description", content: "Plataforma multi-tenant para franquias e franqueados Lava Thru Car Wash: operação, assinaturas, clientes e financeiro." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Dashboard — Lava Thru" },
+      { name: "twitter:description", content: "Plataforma multi-tenant para franquias e franqueados Lava Thru Car Wash: operação, assinaturas, clientes e financeiro." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/61e18a36-f62e-49ba-8a41-ba3da51035ab/id-preview-da0d13f8--74d6393c-09be-498a-8fec-b4539c1e3a41.lovable.app-1783565729230.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/61e18a36-f62e-49ba-8a41-ba3da51035ab/id-preview-da0d13f8--74d6393c-09be-498a-8fec-b4539c1e3a41.lovable.app-1783565729230.png" },
     ],
     links: [
       {
