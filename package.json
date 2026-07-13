@@ -7,7 +7,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "build:dev": "vite build --mode development",
-    "start": "HOST=0.0.0.0 node .output/server/index.mjs",
+    "start": "vite preview --port $PORT --host 0.0.0.0",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write ."
@@ -64,9 +64,7 @@
     "tw-animate-css": "^1.3.4",
     "vaul": "^1.1.2",
     "vite-tsconfig-paths": "^6.0.2",
-    "zod": "^3.24.2"
-  },
-  "devDependencies": {
+    "zod": "^3.24.2",
     "@eslint/js": "^9.32.0",
     "@lovable.dev/vite-tanstack-config": "^2.7.1",
     "@types/node": "^22.16.5",
