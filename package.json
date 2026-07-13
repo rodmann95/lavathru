@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
-    "build:dev": "vite build --mode development",
-    "start": "vite preview --port $PORT --host 0.0.0.0",
+    "build": "NITRO_PRESET=node-server vite build",
+    "build:dev": "NITRO_PRESET=node-server vite build --mode development",
+    "start": "HOST=0.0.0.0 node .output/server/index.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write ."
