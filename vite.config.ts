@@ -13,6 +13,6 @@ export default defineConfig({
     server: { entry: "server" },
   },
   preview: {
-    allowedHosts: true,
+    allowedHosts: ["lavathru-3a88ea6e1a87.herokuapp.com"],
   }
 });
