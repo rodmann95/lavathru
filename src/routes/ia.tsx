@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Send, User } from "lucide-react";
-import { SALES, CLIENTS, SUBSCRIBERS, formatBRL } from "@/lib/mock-data";
+import { SALES, formatBRL } from "@/lib/mock-data";
 import { useApp } from "@/lib/app-context";
 
 export const Route = createFileRoute("/ia")({
@@ -15,7 +15,7 @@ export const Route = createFileRoute("/ia")({
 interface Msg { role: "user" | "assistant"; content: string; }
 
 function IAPage() {
-  const { currentFranchise } = useApp();
+  const { currentFranchise, clients, subscribers } = useApp();
   const [messages, setMessages] = useState<Msg[]>([
     { role: "assistant", content: `Olá! Sou o assistente Lava Thru. Posso responder sobre faturamento, ranking de clientes, uso de planos e mais para ${currentFranchise.name}. Experimente perguntar algo como:\n\n• "Qual meu faturamento nos últimos 30 dias?"\n• "Quem são meus melhores clientes?"\n• "Quantos assinantes ativos temos?"` },
   ]);
@@ -34,11 +34,11 @@ function IAPage() {
       return `Nos últimos 30 dias, ${currentFranchise.name} faturou **${formatBRL(total)}** em ${last30.length} lavagens.`;
     }
     if (/(melhor|ranking|top).*(cliente)/.test(t) || /(cliente).*(melhor|ranking|top)/.test(t)) {
-      const top = [...CLIENTS].sort((a, b) => b.visits - a.visits).slice(0, 3);
-      return `Top 3 clientes por visitas:\n\n${top.map((c, i) => `${i + 1}. **${c.name}** (${c.plate}) — ${c.visits} visitas · ${formatBRL(c.totalSpent)}`).join("\n")}`;
+      const top = [...clients].sort((a, b) => b.visits - a.visits).slice(0, 3);
+      return `Top 3 clientes por visitas:\n\n${top.map((c, i) => `${i + 1}. **${c.name}** (${c.plates?.join(", ") || c.plate}) — ${c.visits} visitas · ${formatBRL(c.totalSpent)}`).join("\n")}`;
     }
     if (/(assinante|assinatura)/.test(t)) {
-      const franchiseSubs = SUBSCRIBERS.filter((s) => s.franchiseId === currentFranchise.id);
+      const franchiseSubs = subscribers.filter((s) => s.franchiseId === currentFranchise.id);
       const total = franchiseSubs.length;
       const usados = franchiseSubs.reduce((a, s) => a + s.planUsed, 0);
       const inclusos = franchiseSubs.reduce((a, s) => a + s.planIncluded, 0);

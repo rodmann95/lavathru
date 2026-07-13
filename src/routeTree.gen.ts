@@ -9,36 +9,24 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as OperacaoRouteImport } from './routes/operacao'
 import { Route as IaRouteImport } from './routes/ia'
-import { Route as FinanceiroRouteImport } from './routes/financeiro'
-import { Route as ClientesRouteImport } from './routes/clientes'
-import { Route as AssinantesRouteImport } from './routes/assinantes'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as VendasOperacaoRouteImport } from './routes/vendas/operacao'
+import { Route as VendasAssinantesRouteImport } from './routes/vendas/assinantes'
+import { Route as FinanceiroVisaoGeralRouteImport } from './routes/financeiro/visao-geral'
+import { Route as FinanceiroDreRouteImport } from './routes/financeiro/dre'
+import { Route as CadastrosUsuariosRouteImport } from './routes/cadastros/usuarios'
+import { Route as CadastrosServicosRouteImport } from './routes/cadastros/servicos'
+import { Route as CadastrosPlanosRouteImport } from './routes/cadastros/planos'
+import { Route as CadastrosFranquiasRouteImport } from './routes/cadastros/franquias'
+import { Route as CadastrosFornecedoresRouteImport } from './routes/cadastros/fornecedores'
+import { Route as CadastrosCuponsRouteImport } from './routes/cadastros/cupons'
+import { Route as CadastrosClientesRouteImport } from './routes/cadastros/clientes'
+import { Route as CadastrosCentrosDeCustoRouteImport } from './routes/cadastros/centros-de-custo'
 
-const OperacaoRoute = OperacaoRouteImport.update({
-  id: '/operacao',
-  path: '/operacao',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IaRoute = IaRouteImport.update({
   id: '/ia',
   path: '/ia',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FinanceiroRoute = FinanceiroRouteImport.update({
-  id: '/financeiro',
-  path: '/financeiro',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ClientesRoute = ClientesRouteImport.update({
-  id: '/clientes',
-  path: '/clientes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AssinantesRoute = AssinantesRouteImport.update({
-  id: '/assinantes',
-  path: '/assinantes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -46,97 +34,191 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VendasOperacaoRoute = VendasOperacaoRouteImport.update({
+  id: '/vendas/operacao',
+  path: '/vendas/operacao',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VendasAssinantesRoute = VendasAssinantesRouteImport.update({
+  id: '/vendas/assinantes',
+  path: '/vendas/assinantes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinanceiroVisaoGeralRoute = FinanceiroVisaoGeralRouteImport.update({
+  id: '/financeiro/visao-geral',
+  path: '/financeiro/visao-geral',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinanceiroDreRoute = FinanceiroDreRouteImport.update({
+  id: '/financeiro/dre',
+  path: '/financeiro/dre',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastrosUsuariosRoute = CadastrosUsuariosRouteImport.update({
+  id: '/cadastros/usuarios',
+  path: '/cadastros/usuarios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastrosServicosRoute = CadastrosServicosRouteImport.update({
+  id: '/cadastros/servicos',
+  path: '/cadastros/servicos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastrosPlanosRoute = CadastrosPlanosRouteImport.update({
+  id: '/cadastros/planos',
+  path: '/cadastros/planos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastrosFranquiasRoute = CadastrosFranquiasRouteImport.update({
+  id: '/cadastros/franquias',
+  path: '/cadastros/franquias',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastrosFornecedoresRoute = CadastrosFornecedoresRouteImport.update({
+  id: '/cadastros/fornecedores',
+  path: '/cadastros/fornecedores',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastrosCuponsRoute = CadastrosCuponsRouteImport.update({
+  id: '/cadastros/cupons',
+  path: '/cadastros/cupons',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastrosClientesRoute = CadastrosClientesRouteImport.update({
+  id: '/cadastros/clientes',
+  path: '/cadastros/clientes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastrosCentrosDeCustoRoute = CadastrosCentrosDeCustoRouteImport.update({
+  id: '/cadastros/centros-de-custo',
+  path: '/cadastros/centros-de-custo',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/assinantes': typeof AssinantesRoute
-  '/clientes': typeof ClientesRoute
-  '/financeiro': typeof FinanceiroRoute
   '/ia': typeof IaRoute
-  '/operacao': typeof OperacaoRoute
+  '/cadastros/centros-de-custo': typeof CadastrosCentrosDeCustoRoute
+  '/cadastros/clientes': typeof CadastrosClientesRoute
+  '/cadastros/cupons': typeof CadastrosCuponsRoute
+  '/cadastros/fornecedores': typeof CadastrosFornecedoresRoute
+  '/cadastros/franquias': typeof CadastrosFranquiasRoute
+  '/cadastros/planos': typeof CadastrosPlanosRoute
+  '/cadastros/servicos': typeof CadastrosServicosRoute
+  '/cadastros/usuarios': typeof CadastrosUsuariosRoute
+  '/financeiro/dre': typeof FinanceiroDreRoute
+  '/financeiro/visao-geral': typeof FinanceiroVisaoGeralRoute
+  '/vendas/assinantes': typeof VendasAssinantesRoute
+  '/vendas/operacao': typeof VendasOperacaoRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/assinantes': typeof AssinantesRoute
-  '/clientes': typeof ClientesRoute
-  '/financeiro': typeof FinanceiroRoute
   '/ia': typeof IaRoute
-  '/operacao': typeof OperacaoRoute
+  '/cadastros/centros-de-custo': typeof CadastrosCentrosDeCustoRoute
+  '/cadastros/clientes': typeof CadastrosClientesRoute
+  '/cadastros/cupons': typeof CadastrosCuponsRoute
+  '/cadastros/fornecedores': typeof CadastrosFornecedoresRoute
+  '/cadastros/franquias': typeof CadastrosFranquiasRoute
+  '/cadastros/planos': typeof CadastrosPlanosRoute
+  '/cadastros/servicos': typeof CadastrosServicosRoute
+  '/cadastros/usuarios': typeof CadastrosUsuariosRoute
+  '/financeiro/dre': typeof FinanceiroDreRoute
+  '/financeiro/visao-geral': typeof FinanceiroVisaoGeralRoute
+  '/vendas/assinantes': typeof VendasAssinantesRoute
+  '/vendas/operacao': typeof VendasOperacaoRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/assinantes': typeof AssinantesRoute
-  '/clientes': typeof ClientesRoute
-  '/financeiro': typeof FinanceiroRoute
   '/ia': typeof IaRoute
-  '/operacao': typeof OperacaoRoute
+  '/cadastros/centros-de-custo': typeof CadastrosCentrosDeCustoRoute
+  '/cadastros/clientes': typeof CadastrosClientesRoute
+  '/cadastros/cupons': typeof CadastrosCuponsRoute
+  '/cadastros/fornecedores': typeof CadastrosFornecedoresRoute
+  '/cadastros/franquias': typeof CadastrosFranquiasRoute
+  '/cadastros/planos': typeof CadastrosPlanosRoute
+  '/cadastros/servicos': typeof CadastrosServicosRoute
+  '/cadastros/usuarios': typeof CadastrosUsuariosRoute
+  '/financeiro/dre': typeof FinanceiroDreRoute
+  '/financeiro/visao-geral': typeof FinanceiroVisaoGeralRoute
+  '/vendas/assinantes': typeof VendasAssinantesRoute
+  '/vendas/operacao': typeof VendasOperacaoRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/assinantes'
-    | '/clientes'
-    | '/financeiro'
     | '/ia'
-    | '/operacao'
+    | '/cadastros/centros-de-custo'
+    | '/cadastros/clientes'
+    | '/cadastros/cupons'
+    | '/cadastros/fornecedores'
+    | '/cadastros/franquias'
+    | '/cadastros/planos'
+    | '/cadastros/servicos'
+    | '/cadastros/usuarios'
+    | '/financeiro/dre'
+    | '/financeiro/visao-geral'
+    | '/vendas/assinantes'
+    | '/vendas/operacao'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/assinantes' | '/clientes' | '/financeiro' | '/ia' | '/operacao'
+  to:
+    | '/'
+    | '/ia'
+    | '/cadastros/centros-de-custo'
+    | '/cadastros/clientes'
+    | '/cadastros/cupons'
+    | '/cadastros/fornecedores'
+    | '/cadastros/franquias'
+    | '/cadastros/planos'
+    | '/cadastros/servicos'
+    | '/cadastros/usuarios'
+    | '/financeiro/dre'
+    | '/financeiro/visao-geral'
+    | '/vendas/assinantes'
+    | '/vendas/operacao'
   id:
     | '__root__'
     | '/'
-    | '/assinantes'
-    | '/clientes'
-    | '/financeiro'
     | '/ia'
-    | '/operacao'
+    | '/cadastros/centros-de-custo'
+    | '/cadastros/clientes'
+    | '/cadastros/cupons'
+    | '/cadastros/fornecedores'
+    | '/cadastros/franquias'
+    | '/cadastros/planos'
+    | '/cadastros/servicos'
+    | '/cadastros/usuarios'
+    | '/financeiro/dre'
+    | '/financeiro/visao-geral'
+    | '/vendas/assinantes'
+    | '/vendas/operacao'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AssinantesRoute: typeof AssinantesRoute
-  ClientesRoute: typeof ClientesRoute
-  FinanceiroRoute: typeof FinanceiroRoute
   IaRoute: typeof IaRoute
-  OperacaoRoute: typeof OperacaoRoute
+  CadastrosCentrosDeCustoRoute: typeof CadastrosCentrosDeCustoRoute
+  CadastrosClientesRoute: typeof CadastrosClientesRoute
+  CadastrosCuponsRoute: typeof CadastrosCuponsRoute
+  CadastrosFornecedoresRoute: typeof CadastrosFornecedoresRoute
+  CadastrosFranquiasRoute: typeof CadastrosFranquiasRoute
+  CadastrosPlanosRoute: typeof CadastrosPlanosRoute
+  CadastrosServicosRoute: typeof CadastrosServicosRoute
+  CadastrosUsuariosRoute: typeof CadastrosUsuariosRoute
+  FinanceiroDreRoute: typeof FinanceiroDreRoute
+  FinanceiroVisaoGeralRoute: typeof FinanceiroVisaoGeralRoute
+  VendasAssinantesRoute: typeof VendasAssinantesRoute
+  VendasOperacaoRoute: typeof VendasOperacaoRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/operacao': {
-      id: '/operacao'
-      path: '/operacao'
-      fullPath: '/operacao'
-      preLoaderRoute: typeof OperacaoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/ia': {
       id: '/ia'
       path: '/ia'
       fullPath: '/ia'
       preLoaderRoute: typeof IaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/financeiro': {
-      id: '/financeiro'
-      path: '/financeiro'
-      fullPath: '/financeiro'
-      preLoaderRoute: typeof FinanceiroRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/clientes': {
-      id: '/clientes'
-      path: '/clientes'
-      fullPath: '/clientes'
-      preLoaderRoute: typeof ClientesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/assinantes': {
-      id: '/assinantes'
-      path: '/assinantes'
-      fullPath: '/assinantes'
-      preLoaderRoute: typeof AssinantesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -146,16 +228,108 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/vendas/operacao': {
+      id: '/vendas/operacao'
+      path: '/vendas/operacao'
+      fullPath: '/vendas/operacao'
+      preLoaderRoute: typeof VendasOperacaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/vendas/assinantes': {
+      id: '/vendas/assinantes'
+      path: '/vendas/assinantes'
+      fullPath: '/vendas/assinantes'
+      preLoaderRoute: typeof VendasAssinantesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/financeiro/visao-geral': {
+      id: '/financeiro/visao-geral'
+      path: '/financeiro/visao-geral'
+      fullPath: '/financeiro/visao-geral'
+      preLoaderRoute: typeof FinanceiroVisaoGeralRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/financeiro/dre': {
+      id: '/financeiro/dre'
+      path: '/financeiro/dre'
+      fullPath: '/financeiro/dre'
+      preLoaderRoute: typeof FinanceiroDreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastros/usuarios': {
+      id: '/cadastros/usuarios'
+      path: '/cadastros/usuarios'
+      fullPath: '/cadastros/usuarios'
+      preLoaderRoute: typeof CadastrosUsuariosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastros/servicos': {
+      id: '/cadastros/servicos'
+      path: '/cadastros/servicos'
+      fullPath: '/cadastros/servicos'
+      preLoaderRoute: typeof CadastrosServicosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastros/planos': {
+      id: '/cadastros/planos'
+      path: '/cadastros/planos'
+      fullPath: '/cadastros/planos'
+      preLoaderRoute: typeof CadastrosPlanosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastros/franquias': {
+      id: '/cadastros/franquias'
+      path: '/cadastros/franquias'
+      fullPath: '/cadastros/franquias'
+      preLoaderRoute: typeof CadastrosFranquiasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastros/fornecedores': {
+      id: '/cadastros/fornecedores'
+      path: '/cadastros/fornecedores'
+      fullPath: '/cadastros/fornecedores'
+      preLoaderRoute: typeof CadastrosFornecedoresRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastros/cupons': {
+      id: '/cadastros/cupons'
+      path: '/cadastros/cupons'
+      fullPath: '/cadastros/cupons'
+      preLoaderRoute: typeof CadastrosCuponsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastros/clientes': {
+      id: '/cadastros/clientes'
+      path: '/cadastros/clientes'
+      fullPath: '/cadastros/clientes'
+      preLoaderRoute: typeof CadastrosClientesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastros/centros-de-custo': {
+      id: '/cadastros/centros-de-custo'
+      path: '/cadastros/centros-de-custo'
+      fullPath: '/cadastros/centros-de-custo'
+      preLoaderRoute: typeof CadastrosCentrosDeCustoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AssinantesRoute: AssinantesRoute,
-  ClientesRoute: ClientesRoute,
-  FinanceiroRoute: FinanceiroRoute,
   IaRoute: IaRoute,
-  OperacaoRoute: OperacaoRoute,
+  CadastrosCentrosDeCustoRoute: CadastrosCentrosDeCustoRoute,
+  CadastrosClientesRoute: CadastrosClientesRoute,
+  CadastrosCuponsRoute: CadastrosCuponsRoute,
+  CadastrosFornecedoresRoute: CadastrosFornecedoresRoute,
+  CadastrosFranquiasRoute: CadastrosFranquiasRoute,
+  CadastrosPlanosRoute: CadastrosPlanosRoute,
+  CadastrosServicosRoute: CadastrosServicosRoute,
+  CadastrosUsuariosRoute: CadastrosUsuariosRoute,
+  FinanceiroDreRoute: FinanceiroDreRoute,
+  FinanceiroVisaoGeralRoute: FinanceiroVisaoGeralRoute,
+  VendasAssinantesRoute: VendasAssinantesRoute,
+  VendasOperacaoRoute: VendasOperacaoRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
