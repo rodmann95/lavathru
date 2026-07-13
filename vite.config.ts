@@ -12,7 +12,9 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
-  preview: {
-    allowedHosts: ["lavathru-3a88ea6e1a87.herokuapp.com"],
+  vite: {
+    preview: {
+      allowedHosts: true,
+    }
   }
 });
