@@ -148,7 +148,7 @@ function OperacaoPage() {
 }
 
 // Helper: validates a coupon code against the current franchise
-function validateCoupon(
+export function validateCoupon(
   code: string,
   coupons: Coupon[],
   franchiseId: string,
@@ -169,13 +169,13 @@ function validateCoupon(
   return { valid: true, coupon: found };
 }
 
-function computeDiscount(coupon: Coupon | null, price: number): number {
+export function computeDiscount(coupon: Coupon | null, price: number): number {
   if (!coupon) return 0;
   if (coupon.discountType === "percentage") return Math.min(price, price * (coupon.discountValue / 100));
   return Math.min(price, coupon.discountValue);
 }
 
-function CouponInput({
+export function CouponInput({
   franchiseId,
   coupons,
   onApply,
