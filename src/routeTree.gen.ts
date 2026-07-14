@@ -11,12 +11,14 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IaRouteImport } from './routes/ia'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as VendasPdvRouteImport } from './routes/vendas/pdv'
 import { Route as VendasOperacaoRouteImport } from './routes/vendas/operacao'
 import { Route as VendasAssinantesRouteImport } from './routes/vendas/assinantes'
 import { Route as FinanceiroVisaoGeralRouteImport } from './routes/financeiro/visao-geral'
 import { Route as FinanceiroDreRouteImport } from './routes/financeiro/dre'
 import { Route as CadastrosUsuariosRouteImport } from './routes/cadastros/usuarios'
 import { Route as CadastrosServicosRouteImport } from './routes/cadastros/servicos'
+import { Route as CadastrosProdutosRouteImport } from './routes/cadastros/produtos'
 import { Route as CadastrosPlanosRouteImport } from './routes/cadastros/planos'
 import { Route as CadastrosFranquiasRouteImport } from './routes/cadastros/franquias'
 import { Route as CadastrosFornecedoresRouteImport } from './routes/cadastros/fornecedores'
@@ -32,6 +34,11 @@ const IaRoute = IaRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VendasPdvRoute = VendasPdvRouteImport.update({
+  id: '/vendas/pdv',
+  path: '/vendas/pdv',
   getParentRoute: () => rootRouteImport,
 } as any)
 const VendasOperacaoRoute = VendasOperacaoRouteImport.update({
@@ -62,6 +69,11 @@ const CadastrosUsuariosRoute = CadastrosUsuariosRouteImport.update({
 const CadastrosServicosRoute = CadastrosServicosRouteImport.update({
   id: '/cadastros/servicos',
   path: '/cadastros/servicos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastrosProdutosRoute = CadastrosProdutosRouteImport.update({
+  id: '/cadastros/produtos',
+  path: '/cadastros/produtos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CadastrosPlanosRoute = CadastrosPlanosRouteImport.update({
@@ -104,12 +116,14 @@ export interface FileRoutesByFullPath {
   '/cadastros/fornecedores': typeof CadastrosFornecedoresRoute
   '/cadastros/franquias': typeof CadastrosFranquiasRoute
   '/cadastros/planos': typeof CadastrosPlanosRoute
+  '/cadastros/produtos': typeof CadastrosProdutosRoute
   '/cadastros/servicos': typeof CadastrosServicosRoute
   '/cadastros/usuarios': typeof CadastrosUsuariosRoute
   '/financeiro/dre': typeof FinanceiroDreRoute
   '/financeiro/visao-geral': typeof FinanceiroVisaoGeralRoute
   '/vendas/assinantes': typeof VendasAssinantesRoute
   '/vendas/operacao': typeof VendasOperacaoRoute
+  '/vendas/pdv': typeof VendasPdvRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -120,12 +134,14 @@ export interface FileRoutesByTo {
   '/cadastros/fornecedores': typeof CadastrosFornecedoresRoute
   '/cadastros/franquias': typeof CadastrosFranquiasRoute
   '/cadastros/planos': typeof CadastrosPlanosRoute
+  '/cadastros/produtos': typeof CadastrosProdutosRoute
   '/cadastros/servicos': typeof CadastrosServicosRoute
   '/cadastros/usuarios': typeof CadastrosUsuariosRoute
   '/financeiro/dre': typeof FinanceiroDreRoute
   '/financeiro/visao-geral': typeof FinanceiroVisaoGeralRoute
   '/vendas/assinantes': typeof VendasAssinantesRoute
   '/vendas/operacao': typeof VendasOperacaoRoute
+  '/vendas/pdv': typeof VendasPdvRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -137,12 +153,14 @@ export interface FileRoutesById {
   '/cadastros/fornecedores': typeof CadastrosFornecedoresRoute
   '/cadastros/franquias': typeof CadastrosFranquiasRoute
   '/cadastros/planos': typeof CadastrosPlanosRoute
+  '/cadastros/produtos': typeof CadastrosProdutosRoute
   '/cadastros/servicos': typeof CadastrosServicosRoute
   '/cadastros/usuarios': typeof CadastrosUsuariosRoute
   '/financeiro/dre': typeof FinanceiroDreRoute
   '/financeiro/visao-geral': typeof FinanceiroVisaoGeralRoute
   '/vendas/assinantes': typeof VendasAssinantesRoute
   '/vendas/operacao': typeof VendasOperacaoRoute
+  '/vendas/pdv': typeof VendasPdvRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -155,12 +173,14 @@ export interface FileRouteTypes {
     | '/cadastros/fornecedores'
     | '/cadastros/franquias'
     | '/cadastros/planos'
+    | '/cadastros/produtos'
     | '/cadastros/servicos'
     | '/cadastros/usuarios'
     | '/financeiro/dre'
     | '/financeiro/visao-geral'
     | '/vendas/assinantes'
     | '/vendas/operacao'
+    | '/vendas/pdv'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -171,12 +191,14 @@ export interface FileRouteTypes {
     | '/cadastros/fornecedores'
     | '/cadastros/franquias'
     | '/cadastros/planos'
+    | '/cadastros/produtos'
     | '/cadastros/servicos'
     | '/cadastros/usuarios'
     | '/financeiro/dre'
     | '/financeiro/visao-geral'
     | '/vendas/assinantes'
     | '/vendas/operacao'
+    | '/vendas/pdv'
   id:
     | '__root__'
     | '/'
@@ -187,12 +209,14 @@ export interface FileRouteTypes {
     | '/cadastros/fornecedores'
     | '/cadastros/franquias'
     | '/cadastros/planos'
+    | '/cadastros/produtos'
     | '/cadastros/servicos'
     | '/cadastros/usuarios'
     | '/financeiro/dre'
     | '/financeiro/visao-geral'
     | '/vendas/assinantes'
     | '/vendas/operacao'
+    | '/vendas/pdv'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -204,12 +228,14 @@ export interface RootRouteChildren {
   CadastrosFornecedoresRoute: typeof CadastrosFornecedoresRoute
   CadastrosFranquiasRoute: typeof CadastrosFranquiasRoute
   CadastrosPlanosRoute: typeof CadastrosPlanosRoute
+  CadastrosProdutosRoute: typeof CadastrosProdutosRoute
   CadastrosServicosRoute: typeof CadastrosServicosRoute
   CadastrosUsuariosRoute: typeof CadastrosUsuariosRoute
   FinanceiroDreRoute: typeof FinanceiroDreRoute
   FinanceiroVisaoGeralRoute: typeof FinanceiroVisaoGeralRoute
   VendasAssinantesRoute: typeof VendasAssinantesRoute
   VendasOperacaoRoute: typeof VendasOperacaoRoute
+  VendasPdvRoute: typeof VendasPdvRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -226,6 +252,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/vendas/pdv': {
+      id: '/vendas/pdv'
+      path: '/vendas/pdv'
+      fullPath: '/vendas/pdv'
+      preLoaderRoute: typeof VendasPdvRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/vendas/operacao': {
@@ -268,6 +301,13 @@ declare module '@tanstack/react-router' {
       path: '/cadastros/servicos'
       fullPath: '/cadastros/servicos'
       preLoaderRoute: typeof CadastrosServicosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastros/produtos': {
+      id: '/cadastros/produtos'
+      path: '/cadastros/produtos'
+      fullPath: '/cadastros/produtos'
+      preLoaderRoute: typeof CadastrosProdutosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cadastros/planos': {
@@ -324,12 +364,14 @@ const rootRouteChildren: RootRouteChildren = {
   CadastrosFornecedoresRoute: CadastrosFornecedoresRoute,
   CadastrosFranquiasRoute: CadastrosFranquiasRoute,
   CadastrosPlanosRoute: CadastrosPlanosRoute,
+  CadastrosProdutosRoute: CadastrosProdutosRoute,
   CadastrosServicosRoute: CadastrosServicosRoute,
   CadastrosUsuariosRoute: CadastrosUsuariosRoute,
   FinanceiroDreRoute: FinanceiroDreRoute,
   FinanceiroVisaoGeralRoute: FinanceiroVisaoGeralRoute,
   VendasAssinantesRoute: VendasAssinantesRoute,
   VendasOperacaoRoute: VendasOperacaoRoute,
+  VendasPdvRoute: VendasPdvRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -17,6 +17,8 @@ import {
   Truck,
   LineChart,
   BarChart3,
+  Package,
+  Store,
 } from "lucide-react";
 import {
   Sidebar,
@@ -47,12 +49,24 @@ const financeiroItems = [
   { title: "Centros de Custo", url: "/cadastros/centros-de-custo", icon: LineChart },
 ];
 
-const vendasItems = [
-  { title: "Operação", url: "/vendas/operacao", icon: Car },
-  { title: "Assinantes", url: "/vendas/assinantes", icon: Users },
-  { title: "Serviços", url: "/cadastros/servicos", icon: Wrench },
-  { title: "Planos", url: "/cadastros/planos", icon: CreditCard },
-  { title: "Cupons", url: "/cadastros/cupons", icon: Tag },
+const vendasMenuGroups = [
+  {
+    label: "Operação Diária",
+    items: [
+      { title: "Lançar Venda", url: "/vendas/operacao", icon: Car },
+      { title: "PDV Conveniência", url: "/vendas/pdv", icon: Store },
+      { title: "Assinantes", url: "/vendas/assinantes", icon: Users },
+    ]
+  },
+  {
+    label: "Cadastros de Venda",
+    items: [
+      { title: "Serviços", url: "/cadastros/servicos", icon: Wrench },
+      { title: "Produtos", url: "/cadastros/produtos", icon: Package },
+      { title: "Planos", url: "/cadastros/planos", icon: CreditCard },
+      { title: "Cupons", url: "/cadastros/cupons", icon: Tag },
+    ]
+  }
 ];
 
 const cadastroItemsFranquia = [
@@ -156,19 +170,26 @@ export function AppSidebar() {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <SidebarMenuSub>
-                      {vendasItems.map((subItem) => {
-                        const active = pathname.startsWith(subItem.url);
-                        return (
-                          <SidebarMenuSubItem key={subItem.url}>
-                            <SidebarMenuSubButton asChild isActive={active}>
-                              <Link to={subItem.url} className="flex items-center gap-2">
-                                <subItem.icon className="h-3.5 w-3.5" />
-                                <span>{subItem.title}</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        );
-                      })}
+                      {vendasMenuGroups.map((group, i) => (
+                        <div key={group.label} className={i > 0 ? "mt-3" : ""}>
+                          <div className="px-4 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+                            {group.label}
+                          </div>
+                          {group.items.map((subItem) => {
+                            const active = pathname.startsWith(subItem.url);
+                            return (
+                              <SidebarMenuSubItem key={subItem.url}>
+                                <SidebarMenuSubButton asChild isActive={active}>
+                                  <Link to={subItem.url} className="flex items-center gap-2">
+                                    <subItem.icon className="h-3.5 w-3.5" />
+                                    <span>{subItem.title}</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            );
+                          })}
+                        </div>
+                      ))}
                     </SidebarMenuSub>
                   </CollapsibleContent>
                 </SidebarMenuItem>

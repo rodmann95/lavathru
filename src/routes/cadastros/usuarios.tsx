@@ -369,7 +369,7 @@ function UsuariosPage() {
                     ))}
                   </div>
                 )}
-                {form.role !== "franquia" && profile === "franquia" && form.franchiseIds.length > 0 && (
+                {profile === "franquia" && form.franchiseIds.length > 0 && (
                   <p className="text-xs text-muted-foreground">
                     {form.franchiseIds.length} franquia(s) selecionada(s)
                   </p>

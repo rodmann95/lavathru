@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,10 +13,11 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Search, CheckCircle2, XCircle, QrCode, CreditCard, Banknote, Sparkles, Tag, X } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Search, CheckCircle2, XCircle, QrCode, CreditCard, Banknote, Sparkles, Tag, X, Plus, Minus, Package, ShoppingCart, Flame } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "@/lib/app-context";
-import { formatBRL, type Coupon } from "@/lib/mock-data";
+import { formatBRL, type Coupon, type Product } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/vendas/operacao")({
   head: () => ({ meta: [{ title: "Operação — Lava Thru" }] }),
@@ -29,11 +30,12 @@ type LookupState =
   | { status: "not-subscriber"; plate: string };
 
 function OperacaoPage() {
-  const { currentFranchise, isSubscribed } = useApp();
+  const { currentFranchise, isSubscribed, setSubscribers } = useApp();
   const [plateInput, setPlateInput] = useState("");
   const [lookup, setLookup] = useState<LookupState>({ status: "idle" });
   const [saleOpen, setSaleOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
+  const [subscriberWashOpen, setSubscriberWashOpen] = useState(false);
 
   function handleLookup() {
     const plate = plateInput.trim().toUpperCase();
@@ -79,9 +81,22 @@ function OperacaoPage() {
                   </div>
                 </div>
               </div>
-              <Button variant="outline" onClick={() => { toast.success("Lavagem registrada como assinatura"); setLookup({ status: "idle" }); setPlateInput(""); }}>
-                Registrar lavagem
-              </Button>
+              <div className="flex gap-2 w-full md:w-auto">
+                <Button 
+                  onClick={() => { 
+                    setSubscribers((prev) => prev.map((s) => (s.id === lookup.subscriber.id ? { ...s, planUsed: s.planUsed + 1 } : s)));
+                    toast.success("Lavagem de assinante registrada!"); 
+                    setLookup({ status: "idle" }); 
+                    setPlateInput(""); 
+                  }}
+                  className="bg-success text-success-foreground hover:bg-success/90"
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-2" /> Apenas Lavagem
+                </Button>
+                <Button variant="outline" onClick={() => setSubscriberWashOpen(true)}>
+                  <Package className="h-4 w-4 mr-2" /> Lavagem + Conveniência
+                </Button>
+              </div>
             </div>
           )}
 
@@ -108,7 +123,26 @@ function OperacaoPage() {
       </Card>
 
       <SaleDialog open={saleOpen} onOpenChange={setSaleOpen} plate={lookup.status === "not-subscriber" ? lookup.plate : ""} />
-      <QuickPlanDialog open={planOpen} onOpenChange={setPlanOpen} plate={lookup.status === "not-subscriber" ? lookup.plate : ""} />
+      <QuickPlanDialog 
+        open={planOpen} 
+        onOpenChange={setPlanOpen} 
+        plate={lookup.status === "not-subscriber" ? lookup.plate : ""} 
+        onSuccess={(sub) => {
+          setLookup({ status: "subscriber", subscriber: sub });
+          setPlanOpen(false);
+        }}
+      />
+      <SubscriberWashDialog
+        open={subscriberWashOpen}
+        onOpenChange={setSubscriberWashOpen}
+        plate={lookup.status === "subscriber" ? lookup.subscriber.plate : ""}
+        subscriber={lookup.status === "subscriber" ? lookup.subscriber : null}
+        onSuccess={() => {
+          setSubscriberWashOpen(false);
+          setLookup({ status: "idle" });
+          setPlateInput("");
+        }}
+      />
     </div>
   );
 }
@@ -117,7 +151,8 @@ function OperacaoPage() {
 function validateCoupon(
   code: string,
   coupons: Coupon[],
-  franchiseId: string
+  franchiseId: string,
+  allowedTargets: string[]
 ): { valid: true; coupon: Coupon } | { valid: false; reason: string } {
   const found = coupons.find((c) => c.code.toUpperCase() === code.toUpperCase().trim());
   if (!found) return { valid: false, reason: "Cupom não encontrado." };
@@ -127,6 +162,9 @@ function validateCoupon(
     if (!found.franchiseIds?.includes(franchiseId)) {
       return { valid: false, reason: "Cupom não válido para esta franquia." };
     }
+  }
+  if (!allowedTargets.includes(found.target || "Todos")) {
+    return { valid: false, reason: `Cupom inválido para este tipo de venda.` };
   }
   return { valid: true, coupon: found };
 }
@@ -143,18 +181,20 @@ function CouponInput({
   onApply,
   appliedCoupon,
   onClear,
+  allowedTargets,
 }: {
   franchiseId: string;
   coupons: Coupon[];
   onApply: (coupon: Coupon) => void;
   appliedCoupon: Coupon | null;
   onClear: () => void;
+  allowedTargets: string[];
 }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
 
   function handleApply() {
-    const result = validateCoupon(code, coupons, franchiseId);
+    const result = validateCoupon(code, coupons, franchiseId, allowedTargets);
     if (result.valid) {
       setError("");
       setCode("");
@@ -218,117 +258,338 @@ function CouponInput({
 }
 
 function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange: (v: boolean) => void; plate: string }) {
-  const { services, currentFranchise, profile, coupons } = useApp();
+  const { services, currentFranchise, profile, coupons, products, setProducts } = useApp();
   const [selectedServiceName, setSelectedServiceName] = useState(services[0]?.name || "Essencial");
   const [payment, setPayment] = useState<"PIX" | "Cartão" | "Dinheiro">("PIX");
   const [step, setStep] = useState<"form" | "pix" | "card" | "done">("form");
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+  const [selectedProducts, setSelectedProducts] = useState<{ product: Product; quantity: number }[]>([]);
+  const [productSearch, setProductSearch] = useState("");
 
-  const svc = services.find((s) => s.name === selectedServiceName) || services[0] || { price: 35, duration: "15 min" };
-  const resolvedPrice = svc.priceOverrides?.[currentFranchise.id] !== undefined
+  // Calculate Service Price
+  const svc = services.find((s) => s.name === selectedServiceName) || services[0] || { price: 35, duration: "15 min", royaltyPercent: 10 };
+  const resolvedServicePrice = svc.priceOverrides?.[currentFranchise.id] !== undefined
     ? svc.priceOverrides[currentFranchise.id]
     : svc.price;
 
-  const discount = computeDiscount(appliedCoupon, resolvedPrice);
-  const finalPrice = Math.max(0, resolvedPrice - discount);
+  // Products available to sell
+  const availableProducts = products.filter(
+    (p) => !p.disabledIn?.includes(currentFranchise.id) && (p.stock?.[currentFranchise.id] || 0) > 0
+  );
+
+  const searchedProducts = productSearch.trim() === "" ? [] : availableProducts.filter(p => 
+    p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
+    (p.code && p.code.toLowerCase().includes(productSearch.toLowerCase()))
+  ).slice(0, 5); // max 5 results in dropdown
+
+  // Calculate Products Price
+  const productsTotalPrice = selectedProducts.reduce((acc, item) => {
+    const price = item.product.priceOverrides?.[currentFranchise.id] ?? item.product.basePrice;
+    return acc + price * item.quantity;
+  }, 0);
+
+  const subtotal = resolvedServicePrice + productsTotalPrice;
+  
+  const discount = useMemo(() => {
+    if (!appliedCoupon) return 0;
+    let targetPrice = 0;
+    if (appliedCoupon.target === "Serviço") targetPrice = resolvedServicePrice;
+    else if (appliedCoupon.target === "Produto") targetPrice = productsTotalPrice;
+    else targetPrice = subtotal; // "Todos"
+    
+    return computeDiscount(appliedCoupon, targetPrice);
+  }, [appliedCoupon, resolvedServicePrice, productsTotalPrice, subtotal]);
+
+  const finalPrice = Math.max(0, subtotal - discount);
+
+  // Calculate Royalties
+  const serviceRoyalty = resolvedServicePrice * ((svc.royaltyPercent ?? currentFranchise.royaltyFeePercent) / 100);
+  const productsRoyalty = selectedProducts.reduce((acc, item) => {
+    const price = item.product.priceOverrides?.[currentFranchise.id] ?? item.product.basePrice;
+    return acc + (price * item.quantity * (item.product.royaltyFee / 100));
+  }, 0);
+  const totalRoyalty = serviceRoyalty + productsRoyalty;
 
   function confirm() {
     if (payment === "PIX") setStep("pix");
     else if (payment === "Cartão") setStep("card");
-    else { toast.success("Venda registrada"); reset(); }
+    else finalizeSale();
   }
+
+  function finalizeSale() {
+    // Reduce stock
+    if (selectedProducts.length > 0) {
+      setProducts((prev) =>
+        prev.map((p) => {
+          const soldItem = selectedProducts.find((sp) => sp.product.id === p.id);
+          if (soldItem) {
+            const currentStock = p.stock?.[currentFranchise.id] || 0;
+            return {
+              ...p,
+              stock: {
+                ...p.stock,
+                [currentFranchise.id]: Math.max(0, currentStock - soldItem.quantity),
+              },
+            };
+          }
+          return p;
+        })
+      );
+    }
+    toast.success("Venda registrada com sucesso");
+    reset();
+  }
+
   function reset() {
     setStep("form");
     setAppliedCoupon(null);
+    setSelectedProducts([]);
+    setProductSearch("");
     onOpenChange(false);
     setTimeout(() => { setSelectedServiceName(services[0]?.name || "Essencial"); setPayment("PIX"); }, 200);
   }
 
+  function addProduct(product: Product) {
+    setSelectedProducts((prev) => {
+      const existing = prev.find((p) => p.product.id === product.id);
+      if (existing) {
+        const maxStock = product.stock?.[currentFranchise.id] || 0;
+        if (existing.quantity >= maxStock) {
+          toast.error("Estoque insuficiente");
+          return prev;
+        }
+        return prev.map((p) => (p.product.id === product.id ? { ...p, quantity: p.quantity + 1 } : p));
+      }
+      return [...prev, { product, quantity: 1 }];
+    });
+  }
+
+  function removeProduct(productId: string) {
+    setSelectedProducts((prev) => {
+      const existing = prev.find((p) => p.product.id === productId);
+      if (existing && existing.quantity > 1) {
+        return prev.map((p) => (p.product.id === productId ? { ...p, quantity: p.quantity - 1 } : p));
+      }
+      return prev.filter((p) => p.product.id !== productId);
+    });
+  }
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); else onOpenChange(v); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-5xl">
         {step === "form" && (
           <>
             <DialogHeader>
-              <DialogTitle>Lançar venda</DialogTitle>
-              <DialogDescription>Placa: <span className="font-mono font-bold">{plate}</span></DialogDescription>
+              <DialogTitle className="text-2xl">Lançar venda</DialogTitle>
+              <DialogDescription>Placa do veículo: <span className="font-mono font-bold text-foreground text-base bg-muted px-2 py-1 rounded">{plate}</span></DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>Serviço</Label>
-                <Select value={selectedServiceName} onValueChange={(v) => { setSelectedServiceName(v as any); setAppliedCoupon(null); }}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 mt-2">
+              {/* Left Column: Services & Products */}
+              <div className="lg:col-span-3 space-y-6">
+                {/* Service Cards */}
+                <div>
+                  <Label className="text-base font-semibold mb-3 block">1. Selecione o Serviço</Label>
+                  <div className="grid grid-cols-2 gap-3">
                     {services.map((s) => {
                       const priceForCurrentFranchise = s.priceOverrides?.[currentFranchise.id] ?? s.price;
+                      const isSelected = selectedServiceName === s.name;
                       return (
-                        <SelectItem key={s.name} value={s.name}>
-                          Lavagem {s.name} — {formatBRL(priceForCurrentFranchise)} · {s.duration}
-                        </SelectItem>
+                        <div 
+                          key={s.name} 
+                          onClick={() => { setSelectedServiceName(s.name); setAppliedCoupon(null); }}
+                          className={`relative p-5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col gap-2 overflow-hidden ${isSelected ? "border-brand bg-brand/5 shadow-md scale-[1.02]" : "border-muted bg-background hover:border-brand/40 hover:shadow-sm"}`}
+                        >
+                          {isSelected && (
+                            <div className="absolute top-3 left-3 text-brand bg-brand/20 rounded-full p-0.5">
+                              <CheckCircle2 className="h-4 w-4" />
+                            </div>
+                          )}
+                          {s.isHot && (
+                            <div className="absolute top-2 right-2 flex items-center gap-1 bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border border-orange-200 shadow-sm">
+                              <Flame className="h-3 w-3 fill-orange-500" /> Hot
+                            </div>
+                          )}
+                          <div className={`flex flex-col ${isSelected ? 'mt-6' : 'mt-2'} transition-all`}>
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Lavagem</span>
+                            <span className={`font-black text-2xl leading-none mt-1 ${isSelected ? "text-brand" : "text-foreground"}`}>{s.name}</span>
+                          </div>
+                          <div className="flex items-center justify-between mt-auto pt-4 border-t border-muted/50">
+                            <span className={`text-xl font-extrabold tracking-tight ${isSelected ? "text-brand" : "text-foreground"}`}>{formatBRL(priceForCurrentFranchise)}</span>
+                            <span className="text-xs text-muted-foreground bg-muted/40 px-2 py-1 rounded-md font-medium">{s.duration}</span>
+                          </div>
+                        </div>
                       );
                     })}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Pagamento</Label>
-                <RadioGroup value={payment} onValueChange={(v) => setPayment(v as typeof payment)} className="grid grid-cols-3 gap-2 mt-1.5">
-                  {[
-                    { v: "PIX", icon: QrCode },
-                    { v: "Cartão", icon: CreditCard },
-                    { v: "Dinheiro", icon: Banknote },
-                  ].map(({ v, icon: I }) => (
-                    <label key={v} className={`flex flex-col items-center gap-1 rounded-lg border-2 p-3 cursor-pointer ${payment === v ? "border-brand bg-brand/5" : "border-border"}`}>
-                      <RadioGroupItem value={v} className="sr-only" />
-                      <I className="h-5 w-5" />
-                      <span className="text-xs font-medium">{v}</span>
-                    </label>
-                  ))}
-                </RadioGroup>
-              </div>
-
-              {/* Coupon field */}
-              <div>
-                <Label className="mb-1.5 block">Cupom de desconto</Label>
-                <CouponInput
-                  franchiseId={currentFranchise.id}
-                  coupons={coupons}
-                  appliedCoupon={appliedCoupon}
-                  onApply={setAppliedCoupon}
-                  onClear={() => setAppliedCoupon(null)}
-                />
-              </div>
-
-              {/* Price breakdown */}
-              <div className="space-y-1">
-                {appliedCoupon && (
-                  <div className="flex items-center justify-between px-3 text-sm text-muted-foreground">
-                    <span>Subtotal</span>
-                    <span>{formatBRL(resolvedPrice)}</span>
                   </div>
-                )}
-                {appliedCoupon && (
-                  <div className="flex items-center justify-between px-3 text-sm text-success font-medium">
-                    <span>Desconto ({appliedCoupon.code})</span>
-                    <span>− {formatBRL(discount)}</span>
-                  </div>
-                )}
-                <div className="flex items-center justify-between rounded-lg bg-muted p-3">
-                  <span className="text-sm">Total</span>
-                  <span className="text-xl font-bold">{formatBRL(finalPrice)}</span>
                 </div>
-                {profile === "franqueado" && (
-                  <div className="flex justify-between items-center px-3 text-[11px] text-muted-foreground">
-                    <span>Taxa de Franquia (Royalties {currentFranchise.royaltyFeePercent}%)</span>
-                    <span className="font-semibold">{formatBRL(finalPrice * (currentFranchise.royaltyFeePercent / 100))}</span>
+
+                {/* Products */}
+                {availableProducts.length > 0 && (
+                  <div>
+                    <Label className="text-base font-semibold mb-3 block">2. Conveniência (Opcional)</Label>
+                    <div className="space-y-4">
+                      {/* Search */}
+                      <div className="relative">
+                        <Search className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                        <Input 
+                          placeholder="Buscar produto por nome ou código..." 
+                          className="pl-10 h-12 text-base" 
+                          value={productSearch} 
+                          onChange={(e) => setProductSearch(e.target.value)} 
+                        />
+                        {productSearch && (
+                          <div className="absolute z-10 w-full mt-2 bg-background border rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                            {searchedProducts.map(p => (
+                              <div key={p.id} onClick={() => { addProduct(p); setProductSearch(""); }} className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center text-sm border-b last:border-0">
+                                <div>
+                                  <p className="font-medium text-base">{p.name}</p>
+                                  {p.code && <p className="text-xs text-muted-foreground mt-0.5">Cód: {p.code}</p>}
+                                </div>
+                                <span className="font-bold text-base">{formatBRL(p.priceOverrides?.[currentFranchise.id] ?? p.basePrice)}</span>
+                              </div>
+                            ))}
+                            {searchedProducts.length === 0 && <div className="p-6 text-sm text-muted-foreground text-center">Nenhum produto encontrado.</div>}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Top 4 Quick Add */}
+                      {!productSearch && (
+                        <div className="grid grid-cols-4 gap-2">
+                          {availableProducts.slice(0, 4).map(p => {
+                            const stock = p.stock?.[currentFranchise.id] || 0;
+                            return (
+                              <div key={p.id} onClick={() => addProduct(p)} className="relative bg-background border-2 rounded-xl p-3 hover:border-brand hover:shadow-md cursor-pointer transition-all flex flex-col h-full text-center group">
+                                {p.isHot && (
+                                  <div className="absolute -top-2 -right-2 bg-gradient-to-br from-orange-400 to-orange-600 text-white p-1.5 rounded-full shadow-md z-10">
+                                    <Flame className="h-3 w-3 fill-white" />
+                                  </div>
+                                )}
+                                <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40 group-hover:text-brand transition-colors" />
+                                <p className="font-semibold text-xs leading-tight line-clamp-2 flex-1 text-foreground/80">{p.name}</p>
+                                <span className="font-black text-sm mt-2 block text-brand">{formatBRL(p.priceOverrides?.[currentFranchise.id] ?? p.basePrice)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
+              </div>
+
+              {/* Right Column: Cart & Payment */}
+              <div className="lg:col-span-2 flex flex-col bg-muted/10 border rounded-xl overflow-hidden">
+                <div className="p-4 bg-muted/30 border-b">
+                  <h3 className="font-bold text-lg flex items-center gap-2">
+                    <ShoppingCart className="h-5 w-5" /> Resumo do Pedido
+                  </h3>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  {/* Cart Items */}
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center pb-2 border-b">
+                      <div>
+                        <div className="font-semibold text-sm">Lavagem {selectedServiceName}</div>
+                        <div className="text-xs text-muted-foreground">Veículo: {plate}</div>
+                      </div>
+                      <div className="font-bold">{formatBRL(resolvedServicePrice)}</div>
+                    </div>
+
+                    {selectedProducts.map((sp) => {
+                      const productPrice = sp.product.priceOverrides?.[currentFranchise.id] ?? sp.product.basePrice;
+                      const stock = sp.product.stock?.[currentFranchise.id] || 0;
+                      return (
+                        <div key={sp.product.id} className="flex justify-between items-center pb-2 border-b">
+                          <div className="flex-1 min-w-0 pr-2">
+                            <div className="font-medium text-sm truncate">{sp.product.name}</div>
+                            <div className="text-xs text-muted-foreground">{formatBRL(productPrice)} un.</div>
+                          </div>
+                          <div className="flex flex-col items-end gap-1">
+                            <div className="font-bold text-sm">{formatBRL(productPrice * sp.quantity)}</div>
+                            <div className="flex items-center gap-1 bg-background rounded-md border p-0.5">
+                              <Button type="button" variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => removeProduct(sp.product.id)}>
+                                <Minus className="h-2 w-2" />
+                              </Button>
+                              <span className="font-mono text-xs w-4 text-center">{sp.quantity}</span>
+                              <Button type="button" variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => addProduct(sp.product)} disabled={sp.quantity >= stock}>
+                                <Plus className="h-2 w-2" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Footer Payment Info */}
+                <div className="p-4 bg-muted/30 border-t space-y-4 mt-auto">
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1 block">Cupom de Desconto</Label>
+                    <CouponInput
+                      franchiseId={currentFranchise.id}
+                      coupons={coupons}
+                      appliedCoupon={appliedCoupon}
+                      onApply={setAppliedCoupon}
+                      onClear={() => setAppliedCoupon(null)}
+                      allowedTargets={["Serviço", "Produto", "Todos"]}
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1.5 block">Forma de Pagamento</Label>
+                    <RadioGroup value={payment} onValueChange={(v) => setPayment(v as typeof payment)} className="flex gap-2">
+                      {[
+                        { v: "PIX", icon: QrCode },
+                        { v: "Cartão", icon: CreditCard },
+                        { v: "Dinheiro", icon: Banknote },
+                      ].map(({ v, icon: I }) => (
+                        <label key={v} className={`flex-1 flex flex-col items-center gap-1 rounded-lg border-2 p-2 cursor-pointer transition-colors ${payment === v ? "border-brand bg-brand/5 text-brand" : "border-muted hover:bg-muted/50 text-muted-foreground"}`}>
+                          <RadioGroupItem value={v} className="sr-only" />
+                          <I className="h-4 w-4" />
+                          <span className="text-[10px] font-bold uppercase">{v}</span>
+                        </label>
+                      ))}
+                    </RadioGroup>
+                  </div>
+
+                  <div className="space-y-1 pt-2 border-t">
+                    {appliedCoupon && (
+                      <div className="flex justify-between items-center text-sm text-muted-foreground">
+                        <span>Subtotal</span>
+                        <span>{formatBRL(subtotal)}</span>
+                      </div>
+                    )}
+                    {appliedCoupon && (
+                      <div className="flex justify-between items-center text-sm text-success font-medium">
+                        <span>Desconto</span>
+                        <span>− {formatBRL(discount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center text-xl font-black">
+                      <span>Total</span>
+                      <span>{formatBRL(finalPrice)}</span>
+                    </div>
+                    {profile === "franqueado" && (
+                      <div className="flex justify-between items-center text-[10px] text-muted-foreground mt-1">
+                        <span>Royalties (Matriz)</span>
+                        <span className="font-semibold">{formatBRL(totalRoyalty)}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <Button variant="outline" onClick={reset} className="flex-1">Cancelar</Button>
+                    <Button onClick={confirm} className="flex-[2] bg-brand text-brand-foreground hover:opacity-90 font-bold text-base h-11">
+                      Cobrar {formatBRL(finalPrice)}
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={reset}>Cancelar</Button>
-              <Button onClick={confirm} className="bg-brand text-brand-foreground hover:opacity-90">Confirmar</Button>
-            </DialogFooter>
           </>
         )}
         {step === "pix" && (
@@ -345,7 +606,7 @@ function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={reset}>Cancelar</Button>
-              <Button onClick={() => { toast.success("Pagamento PIX confirmado"); reset(); }} className="bg-success text-success-foreground hover:opacity-90">
+              <Button onClick={finalizeSale} className="bg-success text-success-foreground hover:opacity-90">
                 Simular pagamento
               </Button>
             </DialogFooter>
@@ -361,7 +622,7 @@ function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={reset}>Cancelar</Button>
-              <Button onClick={() => { toast.success("Pagamento no cartão aprovado"); reset(); }} className="bg-success text-success-foreground hover:opacity-90">
+              <Button onClick={finalizeSale} className="bg-success text-success-foreground hover:opacity-90">
                 Simular aprovação
               </Button>
             </DialogFooter>
@@ -372,12 +633,364 @@ function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange
   );
 }
 
-function QuickPlanDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange: (v: boolean) => void; plate: string }) {
+function SubscriberWashDialog({
+  open,
+  onOpenChange,
+  plate,
+  subscriber,
+  onSuccess
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  plate: string;
+  subscriber: any;
+  onSuccess: () => void;
+}) {
+  const { currentFranchise, profile, coupons, products, setProducts, setSubscribers } = useApp();
+  const [payment, setPayment] = useState<"PIX" | "Cartão" | "Dinheiro">("Cartão");
+  const [step, setStep] = useState<"form" | "pix" | "card">("form");
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+  const [selectedProducts, setSelectedProducts] = useState<{ product: Product; quantity: number }[]>([]);
+  const [productSearch, setProductSearch] = useState("");
+
+  const availableProducts = products.filter(
+    (p) => !p.disabledIn?.includes(currentFranchise.id) && (p.stock?.[currentFranchise.id] || 0) > 0
+  );
+
+  const searchedProducts = productSearch.trim() === "" ? [] : availableProducts.filter(p => 
+    p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
+    (p.code && p.code.toLowerCase().includes(productSearch.toLowerCase()))
+  ).slice(0, 5);
+
+  const productsTotalPrice = selectedProducts.reduce((acc, item) => {
+    const price = item.product.priceOverrides?.[currentFranchise.id] ?? item.product.basePrice;
+    return acc + price * item.quantity;
+  }, 0);
+
+  const discount = computeDiscount(appliedCoupon, productsTotalPrice);
+  const finalPrice = Math.max(0, productsTotalPrice - discount);
+
+  const productsRoyalty = selectedProducts.reduce((acc, item) => {
+    const price = item.product.priceOverrides?.[currentFranchise.id] ?? item.product.basePrice;
+    return acc + (price * item.quantity * (item.product.royaltyFee / 100));
+  }, 0);
+
+  function confirm() {
+    if (finalPrice === 0) {
+      finalizeWash();
+    } else if (payment === "PIX") {
+      setStep("pix");
+    } else if (payment === "Cartão") {
+      setStep("card");
+    } else {
+      finalizeWash();
+    }
+  }
+
+  function finalizeWash() {
+    if (selectedProducts.length > 0) {
+      setProducts((prev) =>
+        prev.map((p) => {
+          const soldItem = selectedProducts.find((sp) => sp.product.id === p.id);
+          if (soldItem) {
+            const currentStock = p.stock?.[currentFranchise.id] || 0;
+            return {
+              ...p,
+              stock: { ...p.stock, [currentFranchise.id]: Math.max(0, currentStock - soldItem.quantity) },
+            };
+          }
+          return p;
+        })
+      );
+    }
+    
+    // Register wash
+    if (subscriber) {
+      setSubscribers((prev) =>
+        prev.map((s) => (s.id === subscriber.id ? { ...s, planUsed: s.planUsed + 1 } : s))
+      );
+    }
+    
+    toast.success("Lavagem de assinante registrada com sucesso!");
+    onSuccess();
+    reset();
+  }
+
+  function reset() {
+    setStep("form");
+    setAppliedCoupon(null);
+    setSelectedProducts([]);
+    setProductSearch("");
+    onOpenChange(false);
+    setTimeout(() => { setPayment("Cartão"); }, 200);
+  }
+
+  function addProduct(product: Product) {
+    setSelectedProducts((prev) => {
+      const existing = prev.find((p) => p.product.id === product.id);
+      if (existing) {
+        const maxStock = product.stock?.[currentFranchise.id] || 0;
+        if (existing.quantity >= maxStock) { toast.error("Estoque insuficiente"); return prev; }
+        return prev.map((p) => (p.product.id === product.id ? { ...p, quantity: p.quantity + 1 } : p));
+      }
+      return [...prev, { product, quantity: 1 }];
+    });
+  }
+
+  function removeProduct(productId: string) {
+    setSelectedProducts((prev) => {
+      const existing = prev.find((p) => p.product.id === productId);
+      if (existing && existing.quantity > 1) {
+        return prev.map((p) => (p.product.id === productId ? { ...p, quantity: p.quantity - 1 } : p));
+      }
+      return prev.filter((p) => p.product.id !== productId);
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); else onOpenChange(v); }}>
+      <DialogContent className="max-w-5xl">
+        {step === "form" && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="text-2xl">Lavagem Inclusa — Assinante</DialogTitle>
+              <DialogDescription>Placa do veículo: <span className="font-mono font-bold text-success text-base bg-success/10 px-2 py-1 rounded border border-success/20">{plate}</span></DialogDescription>
+            </DialogHeader>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 mt-2">
+              <div className="lg:col-span-3 space-y-6">
+                <div>
+                  <Label className="text-base font-semibold mb-3 block">1. Serviço Inserido</Label>
+                  <div className="relative p-4 rounded-xl border-2 border-success bg-success/5 flex flex-col gap-2">
+                    <div className="absolute top-3 right-3 h-3 w-3 rounded-full bg-success" />
+                    <div className="font-bold text-lg text-success leading-tight">Lavagem do Plano<br/>(Inclusa)</div>
+                    <div className="flex items-center justify-between mt-auto pt-2">
+                      <span className="text-xl font-black text-success">R$ 0,00</span>
+                      <span className="text-xs text-success/80 bg-success/10 px-2 py-1 rounded border border-success/20">Assinante: {subscriber?.name}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {availableProducts.length > 0 && (
+                  <div>
+                    <Label className="text-base font-semibold mb-3 block">2. Adicionar Conveniência (Opcional)</Label>
+                    <div className="space-y-4">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                        <Input 
+                          placeholder="Buscar produto por nome ou código..." 
+                          className="pl-10 h-12 text-base" 
+                          value={productSearch} 
+                          onChange={(e) => setProductSearch(e.target.value)} 
+                        />
+                        {productSearch && (
+                          <div className="absolute z-10 w-full mt-2 bg-background border rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                            {searchedProducts.map(p => (
+                              <div key={p.id} onClick={() => { addProduct(p); setProductSearch(""); }} className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center text-sm border-b last:border-0">
+                                <div>
+                                  <p className="font-medium text-base">{p.name}</p>
+                                  {p.code && <p className="text-xs text-muted-foreground mt-0.5">Cód: {p.code}</p>}
+                                </div>
+                                <span className="font-bold text-base">{formatBRL(p.priceOverrides?.[currentFranchise.id] ?? p.basePrice)}</span>
+                              </div>
+                            ))}
+                            {searchedProducts.length === 0 && <div className="p-6 text-sm text-muted-foreground text-center">Nenhum produto encontrado.</div>}
+                          </div>
+                        )}
+                      </div>
+
+                      {!productSearch && (
+                        <div className="grid grid-cols-4 gap-2">
+                          {availableProducts.slice(0, 4).map(p => {
+                            const stock = p.stock?.[currentFranchise.id] || 0;
+                            return (
+                              <div key={p.id} onClick={() => addProduct(p)} className="relative bg-background border-2 rounded-xl p-3 hover:border-brand hover:shadow-md cursor-pointer transition-all flex flex-col h-full text-center group">
+                                {p.isHot && (
+                                  <div className="absolute -top-2 -right-2 bg-gradient-to-br from-orange-400 to-orange-600 text-white p-1.5 rounded-full shadow-md z-10">
+                                    <Flame className="h-3 w-3 fill-white" />
+                                  </div>
+                                )}
+                                <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40 group-hover:text-brand transition-colors" />
+                                <p className="font-semibold text-xs leading-tight line-clamp-2 flex-1 text-foreground/80">{p.name}</p>
+                                <span className="font-black text-sm mt-2 block text-brand">{formatBRL(p.priceOverrides?.[currentFranchise.id] ?? p.basePrice)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="lg:col-span-2 flex flex-col bg-muted/10 border rounded-xl overflow-hidden">
+                <div className="p-4 bg-muted/30 border-b">
+                  <h3 className="font-bold text-lg flex items-center gap-2">
+                    <ShoppingCart className="h-5 w-5" /> Resumo do Pedido
+                  </h3>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center pb-2 border-b">
+                      <div>
+                        <div className="font-semibold text-sm">Lavagem Assinatura</div>
+                        <div className="text-xs text-muted-foreground">Veículo: {plate}</div>
+                      </div>
+                      <div className="font-bold text-success">Grátis</div>
+                    </div>
+
+                    {selectedProducts.map((sp) => {
+                      const productPrice = sp.product.priceOverrides?.[currentFranchise.id] ?? sp.product.basePrice;
+                      const stock = sp.product.stock?.[currentFranchise.id] || 0;
+                      return (
+                        <div key={sp.product.id} className="flex justify-between items-center pb-2 border-b">
+                          <div className="flex-1 min-w-0 pr-2">
+                            <div className="font-medium text-sm truncate">{sp.product.name}</div>
+                            <div className="text-xs text-muted-foreground">{formatBRL(productPrice)} un.</div>
+                          </div>
+                          <div className="flex flex-col items-end gap-1">
+                            <div className="font-bold text-sm">{formatBRL(productPrice * sp.quantity)}</div>
+                            <div className="flex items-center gap-1 bg-background rounded-md border p-0.5">
+                              <Button type="button" variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => removeProduct(sp.product.id)}>
+                                <Minus className="h-2 w-2" />
+                              </Button>
+                              <span className="font-mono text-xs w-4 text-center">{sp.quantity}</span>
+                              <Button type="button" variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => addProduct(sp.product)} disabled={sp.quantity >= stock}>
+                                <Plus className="h-2 w-2" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="p-4 bg-muted/30 border-t space-y-4 mt-auto">
+                  {selectedProducts.length > 0 && (
+                    <>
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1 block">Cupom de Desconto</Label>
+                        <CouponInput
+                          franchiseId={currentFranchise.id}
+                          coupons={coupons}
+                          appliedCoupon={appliedCoupon}
+                          onApply={setAppliedCoupon}
+                          onClear={() => setAppliedCoupon(null)}
+                          allowedTargets={["Produto", "Todos"]}
+                        />
+                      </div>
+
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1.5 block">Forma de Pagamento (Avulsos)</Label>
+                        <RadioGroup value={payment} onValueChange={(v) => setPayment(v as typeof payment)} className="flex gap-2">
+                          {[
+                            { v: "PIX", icon: QrCode },
+                            { v: "Cartão", icon: CreditCard },
+                            { v: "Dinheiro", icon: Banknote },
+                          ].map(({ v, icon: I }) => (
+                            <label key={v} className={`flex-1 flex flex-col items-center gap-1 rounded-lg border-2 p-2 cursor-pointer transition-colors ${payment === v ? "border-brand bg-brand/5 text-brand" : "border-muted hover:bg-muted/50 text-muted-foreground"}`}>
+                              <RadioGroupItem value={v} className="sr-only" />
+                              <I className="h-4 w-4" />
+                              <span className="text-[10px] font-bold uppercase">{v}</span>
+                            </label>
+                          ))}
+                        </RadioGroup>
+                      </div>
+
+                      <div className="space-y-1 pt-2 border-t">
+                        {appliedCoupon && (
+                          <div className="flex justify-between items-center text-sm text-muted-foreground">
+                            <span>Subtotal Conveniência</span>
+                            <span>{formatBRL(productsTotalPrice)}</span>
+                          </div>
+                        )}
+                        {appliedCoupon && (
+                          <div className="flex justify-between items-center text-sm text-success font-medium">
+                            <span>Desconto</span>
+                            <span>− {formatBRL(discount)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center text-xl font-black">
+                          <span>Total</span>
+                          <span>{formatBRL(finalPrice)}</span>
+                        </div>
+                        {profile === "franqueado" && (
+                          <div className="flex justify-between items-center text-[10px] text-muted-foreground mt-1">
+                            <span>Royalties (Conveniência)</span>
+                            <span className="font-semibold">{formatBRL(productsRoyalty)}</span>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  <div className="flex gap-2 pt-2">
+                    <Button variant="outline" onClick={reset} className="flex-1">Cancelar</Button>
+                    {finalPrice === 0 ? (
+                      <Button onClick={confirm} className="flex-[2] bg-success text-success-foreground hover:bg-success/90 font-bold text-base h-11">
+                        Confirmar Lavagem Inclusa
+                      </Button>
+                    ) : (
+                      <Button onClick={confirm} className="flex-[2] bg-brand text-brand-foreground hover:opacity-90 font-bold text-base h-11">
+                        Cobrar {formatBRL(finalPrice)}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+        {step === "pix" && (
+          <>
+            <DialogHeader><DialogTitle>Pague com PIX</DialogTitle></DialogHeader>
+            <div className="flex flex-col items-center gap-3 py-4">
+              <div className="p-4 bg-white rounded-lg border">
+                <QrCodeSvg />
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold">{formatBRL(finalPrice)}</div>
+                <div className="text-xs text-muted-foreground">Aguardando confirmação…</div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={reset}>Cancelar</Button>
+              <Button onClick={finalizeWash} className="bg-success text-success-foreground hover:opacity-90">
+                Simular pagamento
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+        {step === "card" && (
+          <>
+            <DialogHeader><DialogTitle>Cartão — Maquininha</DialogTitle></DialogHeader>
+            <div className="flex flex-col items-center gap-3 py-8">
+              <CreditCard className="h-16 w-16 text-brand animate-pulse" />
+              <div className="text-lg font-semibold">Enviando {formatBRL(finalPrice)} para a maquininha…</div>
+              <div className="text-sm text-muted-foreground">Aproxime, insira ou passe o cartão.</div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={reset}>Cancelar</Button>
+              <Button onClick={finalizeWash} className="bg-success text-success-foreground hover:opacity-90">
+                Simular aprovação
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function QuickPlanDialog({ open, onOpenChange, plate, onSuccess }: { open: boolean; onOpenChange: (v: boolean) => void; plate: string; onSuccess: (sub: any) => void }) {
   const { setSubscribers, setClients, clients, currentFranchise, plans, profile, coupons } = useApp();
   const [docType, setDocType] = useState<"cpf" | "cnpj">("cpf");
-  const [payment, setPayment] = useState<"PIX" | "Cartão" | "Boleto">("PIX");
-  const availablePayments = docType === "cnpj" ? ["PIX", "Cartão", "Boleto"] as const : ["PIX", "Cartão"] as const;
+  const [payment, setPayment] = useState<"PIX" | "Cartão" | "Boleto">("Cartão");
+  const availablePayments = docType === "cnpj" ? ["PIX", "Cartão", "Boleto"] as const : ["Cartão"] as const;
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+  const [step, setStep] = useState<"form" | "card">("form");
 
   // Form states
   const [name, setName] = useState("");
@@ -397,8 +1010,9 @@ function QuickPlanDialog({ open, onOpenChange, plate }: { open: boolean; onOpenC
   function reset() {
     onOpenChange(false);
     setTimeout(() => {
+      setStep("form");
       setDocType("cpf");
-      setPayment("PIX");
+      setPayment("Cartão");
       setName("");
       setPhone("");
       setEmail("");
@@ -413,6 +1027,14 @@ function QuickPlanDialog({ open, onOpenChange, plate }: { open: boolean; onOpenC
       toast.error("Por favor, preencha nome e telefone");
       return;
     }
+    if (payment === "Cartão") {
+      setStep("card");
+    } else {
+      finalizeSubscription();
+    }
+  }
+
+  function finalizeSubscription() {
     const cleanPlate = plate.toUpperCase().trim();
     
     // Add subscriber
@@ -449,18 +1071,34 @@ function QuickPlanDialog({ open, onOpenChange, plate }: { open: boolean; onOpenC
     }
     
     setSubscribers(prev => [...prev, newSub]);
-    toast.success(`Assinatura criada · pagamento via ${payment}${appliedCoupon ? ` · cupom ${appliedCoupon.code}` : ""}`);
-    reset();
+    toast.success(`Assinatura criada com sucesso!`);
+    
+    // Reset internal state but do not call onOpenChange directly, let onSuccess handle it
+    setTimeout(() => {
+      setStep("form");
+      setDocType("cpf");
+      setPayment("Cartão");
+      setName("");
+      setPhone("");
+      setEmail("");
+      setCpf("");
+      setCnpj("");
+      setAppliedCoupon(null);
+    }, 200);
+
+    onSuccess(newSub);
   }
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); else onOpenChange(v); }}>
       <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Venda rápida de assinatura</DialogTitle>
-          <DialogDescription>Plano {defaultPlan.name || "Lava Thru"} — {formatBRL(resolvedPlanPrice)} / mês, {defaultPlan.lavagesIncluded} lavagens inclusas</DialogDescription>
-        </DialogHeader>
-        <Tabs value={docType} onValueChange={(v) => { setDocType(v as "cpf" | "cnpj"); setPayment("PIX"); }}>
+        {step === "form" ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Venda rápida de assinatura</DialogTitle>
+              <DialogDescription>Plano {defaultPlan.name || "Lava Thru"} — {formatBRL(resolvedPlanPrice)} / mês, {defaultPlan.lavagesIncluded} lavagens inclusas</DialogDescription>
+            </DialogHeader>
+            <Tabs value={docType} onValueChange={(v) => { setDocType(v as "cpf" | "cnpj"); setPayment(v === "cpf" ? "Cartão" : "PIX"); }}>
           <TabsList className="grid grid-cols-2 w-full">
             <TabsTrigger value="cpf">CPF (Pessoa Física)</TabsTrigger>
             <TabsTrigger value="cnpj">CNPJ (Empresa)</TabsTrigger>
@@ -500,6 +1138,7 @@ function QuickPlanDialog({ open, onOpenChange, plate }: { open: boolean; onOpenC
             appliedCoupon={appliedCoupon}
             onApply={setAppliedCoupon}
             onClear={() => setAppliedCoupon(null)}
+            allowedTargets={["Plano", "Todos"]}
           />
         </div>
 
@@ -529,11 +1168,51 @@ function QuickPlanDialog({ open, onOpenChange, plate }: { open: boolean; onOpenC
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="mt-4">
           <Button variant="outline" onClick={reset}>Cancelar</Button>
-          <Button onClick={confirm} className="bg-brand text-brand-foreground hover:opacity-90">Criar assinatura</Button>
+          <Button onClick={confirm} className="bg-brand text-brand-foreground hover:opacity-90">
+            {payment === "Cartão" ? "Avançar para Pagamento" : "Criar assinatura"}
+          </Button>
         </DialogFooter>
-      </DialogContent>
+      </>
+    ) : (
+      <>
+        <DialogHeader>
+          <DialogTitle>Pagamento de Recorrência</DialogTitle>
+          <DialogDescription>Insira os dados do cartão de crédito para a assinatura recorrente.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="flex justify-center pb-2">
+            <CreditCard className="h-12 w-12 text-brand" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Número do Cartão</Label>
+            <Input placeholder="0000 0000 0000 0000" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Validade</Label>
+              <Input placeholder="MM/AA" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>CVC</Label>
+              <Input placeholder="123" />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Nome Impresso</Label>
+            <Input placeholder="NOME DO TITULAR" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setStep("form")}>Voltar</Button>
+          <Button onClick={finalizeSubscription} className="bg-success text-success-foreground hover:opacity-90">
+            Aprovar Pagamento
+          </Button>
+        </DialogFooter>
+      </>
+    )}
+  </DialogContent>
     </Dialog>
   );
 }

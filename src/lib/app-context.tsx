@@ -16,7 +16,9 @@ import {
   type Plan,
   type FinancialEntry,
   type CostCenter,
+  type Product,
   COST_CENTERS,
+  PRODUCTS,
 } from "./mock-data";
 
 export type Profile = "franquia" | "franqueado";
@@ -40,6 +42,8 @@ interface AppContextValue {
   setCoupons: React.Dispatch<React.SetStateAction<Coupon[]>>;
   plans: Plan[];
   setPlans: React.Dispatch<React.SetStateAction<Plan[]>>;
+  products: Product[];
+  setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
   clients: Client[];
   setClients: React.Dispatch<React.SetStateAction<Client[]>>;
   subscribers: Subscriber[];
@@ -67,6 +71,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [services, setServices] = useState<typeof SERVICES>(SERVICES);
   const [coupons, setCoupons] = useState<Coupon[]>(COUPONS);
   const [plans, setPlans] = useState<Plan[]>(PLANS);
+  const [products, setProducts] = useState<Product[]>(PRODUCTS);
   const [clients, setClients] = useState<Client[]>(CLIENTS);
   const [subscribers, setSubscribers] = useState<Subscriber[]>(SUBSCRIBERS);
   const [financialEntries, setFinancialEntries] = useState<FinancialEntry[]>(MOCK_FINANCIAL_ENTRIES);
@@ -81,11 +86,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (p) setProfileState(p);
     if (f) setSelectedFranchiseIdState(f);
 
-    const loadLocal = <T,>(key: string, setter: (val: T) => void) => {
+    const loadLocal = <T,>(key: string, setter: (val: T) => void, defaultVal?: T) => {
       const stored = localStorage.getItem(key);
       if (stored) {
         try {
-          setter(JSON.parse(stored));
+          let parsed = JSON.parse(stored);
+          if (defaultVal && Array.isArray(defaultVal) && Array.isArray(parsed)) {
+            const defaultArray = defaultVal as any[];
+            const parsedArray = parsed as any[];
+            const merged = parsedArray.map(item => {
+              const def = defaultArray.find(d => (d.id && d.id === item.id) || (d.name && d.name === item.name));
+              if (def) {
+                return { ...item, isHot: def.isHot, code: item.code || def.code };
+              }
+              return item;
+            });
+            defaultArray.forEach(def => {
+              const exists = parsedArray.some(p => (p.id && p.id === def.id) || (p.name && p.name === def.name));
+              if (!exists) {
+                merged.push(def);
+              }
+            });
+            parsed = merged as any;
+          }
+          setter(parsed);
         } catch (e) {
           console.error(`Failed to load ${key} from localStorage`, e);
         }
@@ -94,9 +118,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     loadLocal("lt-franchises", setFranchises);
     loadLocal("lt-users", setUsers);
-    loadLocal("lt-services", setServices);
+    loadLocal("lt-services", setServices, SERVICES);
     loadLocal("lt-coupons", setCoupons);
     loadLocal("lt-plans", setPlans);
+    loadLocal("lt-products", setProducts, PRODUCTS);
     loadLocal("lt-clients", setClients);
     loadLocal("lt-subscribers", setSubscribers);
     loadLocal("lt-financial-entries", setFinancialEntries);
@@ -146,6 +171,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPlans((prev) => {
       const next = typeof val === "function" ? val(prev) : val;
       saveToLocal("lt-plans", next);
+      return next;
+    });
+  };
+
+  const setProductsWithSync = (val: Product[] | ((curr: Product[]) => Product[])) => {
+    setProducts((prev) => {
+      const next = typeof val === "function" ? val(prev) : val;
+      saveToLocal("lt-products", next);
       return next;
     });
   };
@@ -228,6 +261,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCoupons: setCouponsWithSync,
         plans,
         setPlans: setPlansWithSync,
+        products,
+        setProducts: setProductsWithSync,
         clients,
         setClients: setClientsWithSync,
         subscribers,

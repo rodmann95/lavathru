@@ -31,6 +31,7 @@ type FormState = {
   validity: string;
   scope: "global" | "restricted";
   selectedFranchiseIds: string[];
+  target: "Plano" | "Produto" | "Serviço" | "Todos";
 };
 
 const EMPTY_FORM: FormState = {
@@ -40,6 +41,7 @@ const EMPTY_FORM: FormState = {
   validity: "",
   scope: "global",
   selectedFranchiseIds: [],
+  target: "Todos",
 };
 
 function renderScopeCell(c: Coupon, franchises: { id: string; name: string }[]) {
@@ -111,6 +113,7 @@ function CuponsPage() {
       validity: coupon.validity,
       scope: coupon.scope,
       selectedFranchiseIds: coupon.franchiseIds ?? [],
+      target: coupon.target || "Todos",
     });
     setDialogOpen(true);
   }
@@ -157,14 +160,15 @@ function CuponsPage() {
                 validity: form.validity,
                 scope: finalScope,
                 franchiseIds: finalIds,
+                target: form.target,
               }
             : c
         )
       );
-      toast.success("Cupom atualizado!");
+      toast.success("Cupom atualizado com sucesso!");
     } else {
       const newCoupon: Coupon = {
-        id: `cp-${Math.floor(100 + Math.random() * 900)}`,
+        id: `cp-${Math.floor(1000 + Math.random() * 9000)}`,
         code: cleanCode,
         discountType: form.discountType,
         discountValue: parseFloat(form.discountValue),
@@ -172,6 +176,7 @@ function CuponsPage() {
         status: "active",
         scope: finalScope,
         franchiseIds: finalIds,
+        target: form.target,
       };
       setCoupons((prev) => [...prev, newCoupon]);
       toast.success("Cupom cadastrado!");
@@ -235,6 +240,7 @@ function CuponsPage() {
               <TableRow>
                 <TableHead>Código</TableHead>
                 <TableHead>Desconto</TableHead>
+                <TableHead>Alvo</TableHead>
                 <TableHead>Escopo</TableHead>
                 <TableHead>Validade</TableHead>
                 <TableHead>Status</TableHead>
@@ -263,6 +269,11 @@ function CuponsPage() {
                         -{formatBRL(c.discountValue)}
                       </span>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className="font-normal">
+                      {c.target || "Todos"}
+                    </Badge>
                   </TableCell>
                   <TableCell>{renderScopeCell(c, franchises)}</TableCell>
                   <TableCell className="text-muted-foreground text-sm">
@@ -368,6 +379,23 @@ function CuponsPage() {
                   onChange={(e) => setForm((f) => ({ ...f, discountValue: e.target.value }))}
                 />
               </div>
+            </div>
+
+            {/* Target */}
+            <div className="space-y-1.5">
+              <Label>Aplica-se em (Alvo) *</Label>
+              <Select
+                value={form.target}
+                onValueChange={(v) => setForm((f) => ({ ...f, target: v as any }))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Todos">Todos (Carrinho inteiro)</SelectItem>
+                  <SelectItem value="Plano">Somente Planos (Assinatura)</SelectItem>
+                  <SelectItem value="Produto">Somente Produtos (Conveniência)</SelectItem>
+                  <SelectItem value="Serviço">Somente Serviços (Lavagem)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Validity */}

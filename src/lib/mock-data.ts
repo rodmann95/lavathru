@@ -36,11 +36,12 @@ export interface Service {
   royaltyPercent?: number; // % de Royalties da Matriz para este serviço
   costCenterId?: string;   // Centro de Custo vinculado (deve ser tipo receita/ambos)
   priceOverrides?: Record<string, number>;
+  isHot?: boolean; // Destaque/Alta Margem
 }
 
 export const SERVICES: Service[] = [
   { name: "Essencial", price: 35,  duration: "15 min", royaltyPercent: 10, costCenterId: "cc-001" },
-  { name: "Completa",  price: 65,  duration: "30 min", royaltyPercent: 10, costCenterId: "cc-001" },
+  { name: "Completa",  price: 65,  duration: "30 min", royaltyPercent: 10, costCenterId: "cc-001", isHot: true },
   { name: "Premium",   price: 120, duration: "50 min", royaltyPercent: 12, costCenterId: "cc-001" },
   { name: "Detalhada", price: 220, duration: "90 min", royaltyPercent: 12, costCenterId: "cc-001" },
 ];
@@ -179,12 +180,108 @@ export interface Coupon {
   status: "active" | "inactive";
   scope: "global" | "restricted";
   franchiseIds?: string[];
+  target: "Plano" | "Produto" | "Serviço" | "Todos";
 }
 
 export const COUPONS: Coupon[] = [
-  { id: "cp-001", code: "BEMVINDO50", discountType: "fixed", discountValue: 50, validity: "2026-12-31", status: "active", scope: "global" },
-  { id: "cp-002", code: "VERAO10", discountType: "percentage", discountValue: 10, validity: "2026-08-31", status: "active", scope: "restricted", franchiseIds: ["f-001"] },
-  { id: "cp-003", code: "SHINE20", discountType: "percentage", discountValue: 20, validity: "2026-10-31", status: "inactive", scope: "restricted", franchiseIds: ["f-001", "f-003"] },
+  {
+    id: "cup-001",
+    code: "BEMVINDO10",
+    discountType: "percentage",
+    discountValue: 10,
+    validity: "2026-12-31",
+    status: "active",
+    scope: "global",
+    target: "Todos",
+  },
+  {
+    id: "cup-002",
+    code: "LAVAGEM50",
+    discountType: "fixed",
+    discountValue: 50.0,
+    validity: "2025-06-30",
+    status: "active",
+    scope: "restricted",
+    franchiseIds: ["f-001"],
+    target: "Serviço",
+  },
+  { id: "cp-003", code: "SHINE20", discountType: "percentage", discountValue: 20, validity: "2026-10-31", status: "inactive", scope: "restricted", franchiseIds: ["f-001", "f-003"], target: "Serviço" },
+];
+
+export interface Product {
+  id: string;
+  code?: string;
+  name: string;
+  basePrice: number;
+  royaltyFee: number; // Porcentagem ou valor fixo? Assumiremos porcentagem, igual ao da franquia, ou fixo se aplicável. A usuária disse "royalts definido por matriz". Vamos usar % como royalty.
+  stock: Record<string, number>; // franchiseId -> quantidade
+  priceOverrides: Record<string, number>; // franchiseId -> preço customizado
+  disabledIn: string[]; // franchiseIds que não vendem esse produto
+  isHot?: boolean; // Produto incentivado/alta margem
+}
+
+export const PRODUCTS: Product[] = [
+  {
+    id: "prod-001",
+    code: "7891000100101",
+    name: "Cheirinho Automotivo",
+    basePrice: 15.00,
+    royaltyFee: 5, // 5%
+    stock: { "f-001": 50, "f-002": 20 },
+    priceOverrides: { "f-002": 18.00 },
+    disabledIn: [],
+  },
+  {
+    id: "prod-002",
+    code: "7892000200202",
+    name: "Cera Líquida Premium",
+    basePrice: 45.00,
+    royaltyFee: 10,
+    stock: { "f-001": 10 },
+    priceOverrides: {},
+    disabledIn: ["f-003"],
+  },
+  {
+    id: "prod-003",
+    code: "8712000033100",
+    name: "Heineken Long Neck",
+    basePrice: 12.00,
+    royaltyFee: 0, // Produtos de conveniência podem não ter royalty ou ter um menor
+    stock: { "f-001": 24, "f-002": 12, "f-003": 36 },
+    priceOverrides: { "f-002": 14.00 },
+    disabledIn: [],
+  },
+  {
+    id: "prod-004",
+    code: "7893000300303",
+    name: "Pneu Pretinho Pro",
+    basePrice: 25.00,
+    royaltyFee: 8,
+    stock: { "f-001": 15, "f-002": 10, "f-003": 5 },
+    priceOverrides: {},
+    disabledIn: [],
+    isHot: true,
+  },
+  {
+    id: "prod-005",
+    code: "7892840813101",
+    name: "Batata Ruffles 76g",
+    basePrice: 8.50,
+    royaltyFee: 0,
+    stock: { "f-001": 15, "f-002": 5, "f-003": 20 },
+    priceOverrides: {},
+    disabledIn: [],
+  },
+  {
+    id: "prod-005",
+    code: "7894900011517",
+    name: "Água Mineral com Gás 500ml",
+    basePrice: 4.50,
+    royaltyFee: 0,
+    stock: { "f-001": 50, "f-002": 25, "f-003": 40 },
+    priceOverrides: {},
+    disabledIn: [],
+  }
 ];
 
 export interface Plan {
