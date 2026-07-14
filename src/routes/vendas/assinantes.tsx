@@ -235,6 +235,7 @@ function SubscriberDialog({
   // New subscriber fields
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedPlate, setSelectedPlate] = useState("");
+  const [newPlateForExisting, setNewPlateForExisting] = useState("");
   const [newPlate, setNewPlate] = useState("");
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
@@ -317,9 +318,13 @@ function SubscriberDialog({
           toast.error("Selecione o cliente e a placa");
           return;
         }
+        if (selectedPlate === "NEW" && !newPlateForExisting) {
+          toast.error("Informe a nova placa do cliente");
+          return;
+        }
         targetName = selectedClientObj!.name;
         targetPhone = selectedClientObj!.phone;
-        targetPlate = selectedPlate;
+        targetPlate = selectedPlate === "NEW" ? newPlateForExisting.toUpperCase().trim() : selectedPlate;
       } else {
         if (!newPlate || !newName || !newPhone) {
           toast.error("Preencha placa, nome e telefone");
@@ -366,7 +371,7 @@ function SubscriberDialog({
       targetName = selectedClientObj!.name;
       targetPhone = selectedClientObj!.phone;
       targetEmail = `${selectedClientObj!.name.toLowerCase().replace(/\s+/g, "")}@email.com`;
-      targetPlate = selectedPlate;
+      targetPlate = selectedPlate === "NEW" ? newPlateForExisting.toUpperCase().trim() : selectedPlate;
     } else {
       targetName = newName;
       targetPhone = newPhone;
@@ -399,7 +404,16 @@ function SubscriberDialog({
 
     if (activeTab === "existing" && clientToUpdate) {
       setClients((prev) =>
-        prev.map((c) => (c.id === clientToUpdate.id ? { ...c, isSubscriber: true } : c))
+        prev.map((c) => {
+          if (c.id === clientToUpdate.id) {
+            const newPlates = c.plates ? [...c.plates] : [c.plate];
+            if (!newPlates.includes(targetPlate)) {
+              newPlates.push(targetPlate);
+            }
+            return { ...c, isSubscriber: true, plates: newPlates };
+          }
+          return c;
+        })
       );
     }
 
@@ -415,6 +429,7 @@ function SubscriberDialog({
       setPayment("Cartão");
       setSelectedClientId("");
       setSelectedPlate("");
+      setNewPlateForExisting("");
       setNewPlate("");
       setNewName("");
       setNewPhone("");
@@ -566,8 +581,17 @@ function SubscriberDialog({
                                   {(selectedClientObj.plates || [selectedClientObj.plate]).map((p) => (
                                     <SelectItem key={p} value={p}>{p}</SelectItem>
                                   ))}
+                                  <SelectItem value="NEW">Outra Placa...</SelectItem>
                                 </SelectContent>
                               </Select>
+                              {selectedPlate === "NEW" && (
+                                <Input 
+                                  placeholder="ABC1D23" 
+                                  className="font-mono uppercase mt-2" 
+                                  value={newPlateForExisting} 
+                                  onChange={e => setNewPlateForExisting(e.target.value.toUpperCase())} 
+                                />
+                              )}
                             </div>
                           )}
                           <div>

@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Search, Settings2, Pencil, Trash2, Percent, Package, Ban } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Plus, Search, Settings2, Pencil, Trash2, Percent, Package, Ban, Flame } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "@/lib/app-context";
 import { formatBRL } from "@/lib/mock-data";
@@ -28,9 +29,10 @@ type FormState = {
   code: string;
   price: string;
   royaltyPercent: string;
+  isHot: boolean;
 };
 
-const EMPTY_FORM: FormState = { name: "", code: "", price: "", royaltyPercent: "10" };
+const EMPTY_FORM: FormState = { name: "", code: "", price: "", royaltyPercent: "10", isHot: false };
 
 function ProdutosPage() {
   const { products, setProducts, franchises, profile } = useApp();
@@ -82,6 +84,7 @@ function ProdutosPage() {
       code: product.code || "",
       price: product.basePrice.toString(),
       royaltyPercent: product.royaltyFee?.toString() ?? "10",
+      isHot: product.isHot || false,
     });
     setDialogOpen(true);
   }
@@ -113,6 +116,7 @@ function ProdutosPage() {
                 code: form.code || undefined,
                 basePrice: parsedPrice,
                 royaltyFee: parsedRoyalty,
+                isHot: form.isHot,
               }
             : p
         )
@@ -126,6 +130,7 @@ function ProdutosPage() {
         code: form.code || undefined,
         basePrice: parsedPrice,
         royaltyFee: parsedRoyalty,
+        isHot: form.isHot,
         priceOverrides: {},
         stock: {},
         disabledIn: [],
@@ -286,7 +291,10 @@ function ProdutosPage() {
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand/10 shrink-0">
                           <Package className="h-4 w-4 text-brand" />
                         </div>
-                        {p.name}
+                        <div className="flex flex-col">
+                          <span>{p.name}</span>
+                          {p.isHot && <span className="text-[10px] font-bold text-orange-500 uppercase flex items-center gap-1 mt-0.5"><Flame className="h-3 w-3" /> Destaque PDV</span>}
+                        </div>
                       </div>
                     </TableCell>
 
@@ -402,6 +410,14 @@ function ProdutosPage() {
                 <Input type="number" placeholder="5" min={0} max={100} value={form.royaltyPercent} onChange={(e) => setForm((f) => ({ ...f, royaltyPercent: e.target.value }))} />
                 <p className="text-[11px] text-muted-foreground">% repassado à Franqueadora por venda</p>
               </div>
+            </div>
+
+            <div className="flex items-center justify-between border rounded-lg p-3 bg-muted/30">
+              <div className="space-y-0.5">
+                <Label>Destaque no PDV (Hot)</Label>
+                <p className="text-xs text-muted-foreground">Exibe este produto na tela inicial da operação</p>
+              </div>
+              <Switch checked={form.isHot} onCheckedChange={(c) => setForm((f) => ({ ...f, isHot: c }))} />
             </div>
           </div>
           <DialogFooter>

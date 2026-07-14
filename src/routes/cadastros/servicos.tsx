@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Search, Wrench, Clock, DollarSign, Settings2, RefreshCw, Pencil, Trash2, Percent, LineChart } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Plus, Search, Wrench, Clock, DollarSign, Settings2, RefreshCw, Pencil, Trash2, Percent, LineChart, Flame } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "@/lib/app-context";
 import { formatBRL } from "@/lib/mock-data";
@@ -29,9 +30,10 @@ type FormState = {
   duration: string;
   royaltyPercent: string;
   costCenterId: string;
+  isHot: boolean;
 };
 
-const EMPTY_FORM: FormState = { name: "", price: "", duration: "", royaltyPercent: "10", costCenterId: "cc-001" };
+const EMPTY_FORM: FormState = { name: "", price: "", duration: "", royaltyPercent: "10", costCenterId: "cc-001", isHot: false };
 
 function ServicosPage() {
   const { services, setServices, franchises, costCenters } = useApp();
@@ -78,6 +80,7 @@ function ServicosPage() {
       duration: service.duration,
       royaltyPercent: service.royaltyPercent?.toString() ?? "10",
       costCenterId: service.costCenterId || "cc-001",
+      isHot: service.isHot || false,
     });
     setDialogOpen(true);
   }
@@ -113,6 +116,7 @@ function ServicosPage() {
                 duration: form.duration,
                 royaltyPercent: parsedRoyalty,
                 costCenterId: form.costCenterId,
+                isHot: form.isHot,
               }
             : s
         )
@@ -126,6 +130,7 @@ function ServicosPage() {
         duration: form.duration,
         royaltyPercent: parsedRoyalty,
         costCenterId: form.costCenterId,
+        isHot: form.isHot,
         priceOverrides: {},
       };
       setServices((prev) => [...prev, newService]);
@@ -270,7 +275,10 @@ function ServicosPage() {
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand/10 shrink-0">
                           <Wrench className="h-4 w-4 text-brand" />
                         </div>
-                        Lavagem {s.name}
+                        <div className="flex flex-col">
+                          <span>Lavagem {s.name}</span>
+                          {s.isHot && <span className="text-[10px] font-bold text-orange-500 uppercase flex items-center gap-1 mt-0.5"><Flame className="h-3 w-3" /> Destaque PDV</span>}
+                        </div>
                       </div>
                     </TableCell>
 
@@ -503,6 +511,14 @@ function ServicosPage() {
                 </div>
               </div>
             )}
+
+            <div className="flex items-center justify-between border rounded-lg p-3 bg-muted/30 mt-2">
+              <div className="space-y-0.5">
+                <Label>Destaque no PDV (Hot)</Label>
+                <p className="text-xs text-muted-foreground">Exibe este serviço em destaque na tela da operação</p>
+              </div>
+              <Switch checked={form.isHot} onCheckedChange={(c) => setForm((f) => ({ ...f, isHot: c }))} />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
