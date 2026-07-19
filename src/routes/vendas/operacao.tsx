@@ -1,23 +1,62 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, CheckCircle2, XCircle, QrCode, CreditCard, Banknote, Sparkles, Tag, X, Plus, Minus, Package, ShoppingCart, Flame } from "lucide-react";
+import {
+  Search,
+  CheckCircle2,
+  XCircle,
+  QrCode,
+  CreditCard,
+  Banknote,
+  Sparkles,
+  Tag,
+  X,
+  Plus,
+  Minus,
+  Package,
+  ShoppingCart,
+  Flame,
+  Calendar,
+  History,
+  User,
+  ShoppingBag,
+  RefreshCw,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "@/lib/app-context";
-import { formatBRL, type Coupon, type Product } from "@/lib/mock-data";
+import { formatBRL, SALES, type Coupon, type Product } from "@/lib/mock-data";
+
+function formatDate(dateStr?: string): string {
+  if (!dateStr) return "N/A";
+  const clean = dateStr.split("T")[0];
+  const parts = clean.split("-");
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return dateStr;
+}
 
 export const Route = createFileRoute("/vendas/operacao")({
   head: () => ({ meta: [{ title: "Operação — Lava Thru" }] }),
@@ -27,33 +66,122 @@ export const Route = createFileRoute("/vendas/operacao")({
 type LookupState =
   | { status: "idle" }
   | { status: "subscriber"; subscriber: any }
-  | { status: "not-subscriber"; plate: string };
+  | { status: "not-subscriber"; plate: string; client?: any };
 
 function OperacaoPage() {
-  const { currentFranchise, isSubscribed, setSubscribers } = useApp();
+  const { currentFranchise, isSubscribed, setSubscribers, clients, setClients } = useApp();
   const [plateInput, setPlateInput] = useState("");
   const [lookup, setLookup] = useState<LookupState>({ status: "idle" });
   const [saleOpen, setSaleOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [subscriberWashOpen, setSubscriberWashOpen] = useState(false);
 
+  const [quickRegisterOpen, setQuickRegisterOpen] = useState(false);
+  const [quickName, setQuickName] = useState("");
+  const [quickPhone, setQuickPhone] = useState("");
+
+  function handleQuickRegister() {
+    if (!quickName.trim() || !quickPhone.trim()) {
+      toast.error("Por favor, preencha nome e telefone.");
+      return;
+    }
+
+    const plate = lookup.status === "not-subscriber" ? lookup.plate : "";
+    if (!plate) return;
+
+    const existingClient = clients.find(
+      (c) => c.plates?.some((p) => p.toUpperCase() === plate) || c.plate?.toUpperCase() === plate,
+    );
+
+    if (existingClient) {
+      setClients((prev) =>
+        prev.map((c) =>
+          c.id === existingClient.id ? { ...c, name: quickName, phone: quickPhone } : c,
+        ),
+      );
+    } else {
+      const newClient = {
+        id: `c-${Math.floor(100 + Math.random() * 900)}`,
+        name: quickName,
+        plate: plate,
+        plates: [plate],
+        phone: quickPhone,
+        visits: plateHistory?.visits || 1,
+        lastVisit: plateHistory?.lastVisit || new Date().toISOString().split("T")[0],
+        totalSpent: 0,
+        isSubscriber: false,
+      };
+      setClients((prev) => [...prev, newClient]);
+    }
+
+    toast.success("Cliente cadastrado com sucesso!");
+    setQuickRegisterOpen(false);
+    setQuickName("");
+    setQuickPhone("");
+  }
+
+  const plateHistory = useMemo(() => {
+    let plate = "";
+    if (lookup.status === "subscriber") {
+      plate = lookup.subscriber.plate;
+    } else if (lookup.status === "not-subscriber") {
+      plate = lookup.plate;
+    }
+    if (!plate) return null;
+
+    const plateSales = SALES.filter((s) => s.plate.toUpperCase() === plate.toUpperCase()).sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+
+    const client = clients.find(
+      (c) =>
+        c.plates?.some((p) => p.toUpperCase() === plate.toUpperCase()) ||
+        c.plate?.toUpperCase() === plate.toUpperCase(),
+    );
+
+    const visits = client ? Math.max(client.visits, plateSales.length) : plateSales.length;
+    const lastVisit = plateSales[0] ? plateSales[0].date.split("T")[0] : client?.lastVisit;
+    const lastConsumed = plateSales[0]
+      ? [plateSales[0].service, ...(plateSales[0].products || [])].join(" + ")
+      : undefined;
+    const name = client?.name || plateSales[0]?.clientName || undefined;
+
+    return {
+      name,
+      visits,
+      lastVisit,
+      lastConsumed,
+      hasHistory: visits > 0 || !!client,
+    };
+  }, [lookup, clients]);
+
   function handleLookup() {
     const plate = plateInput.trim().toUpperCase();
     if (!plate) return;
     const sub = isSubscribed(plate);
-    if (sub) setLookup({ status: "subscriber", subscriber: sub });
-    else setLookup({ status: "not-subscriber", plate });
+    if (sub) {
+      setLookup({ status: "subscriber", subscriber: sub });
+    } else {
+      const client = clients.find(
+        (c) => c.plates.includes(plate) || c.plate.toUpperCase() === plate,
+      );
+      setLookup({ status: "not-subscriber", plate, client });
+    }
   }
 
   return (
     <div className="space-y-6 max-w-5xl">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Operação</h1>
-        <p className="text-sm text-muted-foreground">Consulta de placa e lançamento de vendas — {currentFranchise.name}</p>
+        <p className="text-sm text-muted-foreground">
+          Consulta de placa e lançamento de vendas — {currentFranchise.name}
+        </p>
       </div>
 
       <Card>
-        <CardHeader><CardTitle>Consultar placa</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Consultar placa</CardTitle>
+        </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-2">
             <Input
@@ -63,37 +191,171 @@ function OperacaoPage() {
               onKeyDown={(e) => e.key === "Enter" && handleLookup()}
               className="text-lg font-mono tracking-widest uppercase max-w-xs"
             />
-            <Button onClick={handleLookup} className="bg-brand text-brand-foreground hover:opacity-90">
+            <Button
+              onClick={handleLookup}
+              className="bg-brand text-brand-foreground hover:opacity-90"
+            >
               <Search className="h-4 w-4 mr-2" /> Consultar
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">Placas cadastradas de teste: ABC1D23, XYZ9K88, MER0T55 · Qualquer outra placa retorna como não-associada.</p>
+          <div className="text-xs text-muted-foreground space-y-1.5 pt-1">
+            <p className="font-medium text-foreground/80">
+              Placas de teste para simulação por cenário:
+            </p>
+            <ul className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-muted/30 p-3 rounded-lg border border-border/50">
+              <li>
+                <span className="font-semibold block text-success mb-0.5">Assinante Ativo</span>
+                <code className="bg-background border px-1.5 py-0.5 rounded font-mono text-[11px] font-bold">
+                  ABC1D23
+                </code>{" "}
+                ou{" "}
+                <code className="bg-background border px-1.5 py-0.5 rounded font-mono text-[11px] font-bold">
+                  XYZ9K88
+                </code>
+                <span className="block text-[10px] text-muted-foreground mt-0.5">
+                  Mostra o plano e o grid de consumo.
+                </span>
+              </li>
+              <li>
+                <span className="font-semibold block text-brand mb-0.5">
+                  Não Assinante (Recorrente)
+                </span>
+                <code className="bg-background border px-1.5 py-0.5 rounded font-mono text-[11px] font-bold">
+                  RJH2M45
+                </code>{" "}
+                (Cadastrado) ou{" "}
+                <code className="bg-background border px-1.5 py-0.5 rounded font-mono text-[11px] font-bold">
+                  BHZ5W77
+                </code>{" "}
+                (Sem Cadastro)
+                <span className="block text-[10px] text-muted-foreground mt-0.5">
+                  BHZ5W77 exibe a opção de "Cadastro rápido" no card.
+                </span>
+              </li>
+              <li>
+                <span className="font-semibold block text-foreground/75 mb-0.5">
+                  Primeira Visita
+                </span>
+                <code className="bg-background border px-1.5 py-0.5 rounded font-mono text-[11px] font-bold">
+                  AAA9999
+                </code>{" "}
+                ou qualquer outra
+                <span className="block text-[10px] text-muted-foreground mt-0.5">
+                  Ativa o card de boas-vindas (Primeira Vez).
+                </span>
+              </li>
+            </ul>
+          </div>
 
           {lookup.status === "subscriber" && (
-            <div className="rounded-xl border-2 border-success bg-success/10 p-6 flex items-center justify-between flex-wrap gap-4 animate-fadeIn">
-              <div className="flex items-center gap-4">
-                <CheckCircle2 className="h-10 w-10 text-success" />
-                <div>
-                  <div className="font-mono text-3xl font-bold text-success">{lookup.subscriber.plate}</div>
-                  <div className="text-sm mt-1"><strong>{lookup.subscriber.name}</strong> — Assinante ativo</div>
-                  <div className="text-xs text-muted-foreground">
-                    {lookup.subscriber.planUsed} / {lookup.subscriber.planIncluded} lavagens usadas
+            <div className="rounded-2xl border-2 border-success/30 bg-success/5 p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 animate-fadeIn shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-success/20 rounded-2xl text-success mt-1">
+                  <CheckCircle2 className="h-8 w-8" />
+                </div>
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-3xl font-black text-success tracking-widest">
+                        {lookup.subscriber.plate}
+                      </span>
+                      <Badge className="bg-success text-success-foreground text-xs font-bold hover:bg-success/80">
+                        Assinante Ativo
+                      </Badge>
+                    </div>
+                    <div className="bg-success/15 border border-success/30 px-4 py-2 rounded-xl inline-flex flex-col shadow-sm">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-success/80">
+                        Chamar pelo Nome
+                      </span>
+                      <span className="text-xl font-extrabold text-foreground flex items-center gap-1.5 mt-0.5">
+                        <User className="h-5 w-5 text-success shrink-0" />
+                        {lookup.subscriber.name}
+                      </span>
+                    </div>
                   </div>
+
+                  <div className="text-xs text-muted-foreground bg-success/10 border border-success/20 px-3 py-2 rounded-xl inline-block font-medium">
+                    Uso do mês:{" "}
+                    <span className="text-success font-bold text-sm mx-1">
+                      {lookup.subscriber.planUsed}
+                    </span>{" "}
+                    de <span className="font-bold">{lookup.subscriber.planIncluded}</span> lavagens
+                    inclusas
+                  </div>
+
+                  {plateHistory && (
+                    <div className="mt-4 border border-border/85 bg-background/50 rounded-xl p-4 shadow-sm w-full max-w-lg space-y-3">
+                      <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 border-b pb-2">
+                        <History className="h-4 w-4" /> Histórico de Visitas
+                      </div>
+
+                      {plateHistory.visits === 0 ? (
+                        <div className="bg-gradient-to-r from-brand/10 to-brand/5 p-3 rounded-lg flex items-center gap-2.5 text-brand border border-brand/10">
+                          <Sparkles className="h-5 w-5 fill-brand/20 animate-pulse" />
+                          <span className="font-semibold text-xs">
+                            Primeiro uso da assinatura registrado! Seja bem-vindo(a).
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="space-y-3 pt-1">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-0.5">
+                              <span className="text-[10px] text-muted-foreground block uppercase font-bold tracking-wider">
+                                Última Visita
+                              </span>
+                              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                {formatDate(plateHistory.lastVisit)}
+                              </span>
+                            </div>
+                            <div className="space-y-0.5">
+                              <span className="text-[10px] text-muted-foreground block uppercase font-bold tracking-wider">
+                                Total Visitas
+                              </span>
+                              <span className="text-xs font-bold text-success flex items-center gap-1.5">
+                                <RefreshCw className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                {plateHistory.visits}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="space-y-0.5 border-t pt-2 border-border/40">
+                            <span className="text-[10px] text-muted-foreground block uppercase font-bold tracking-wider">
+                              Último Consumo
+                            </span>
+                            <span className="text-xs font-semibold text-foreground flex items-start gap-1.5 leading-relaxed">
+                              <ShoppingBag className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                              <span className="break-words">
+                                {plateHistory.lastConsumed || "N/A"}
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="flex gap-2 w-full md:w-auto">
-                <Button 
-                  onClick={() => { 
-                    setSubscribers((prev) => prev.map((s) => (s.id === lookup.subscriber.id ? { ...s, planUsed: s.planUsed + 1 } : s)));
-                    toast.success("Lavagem de assinante registrada!"); 
-                    setLookup({ status: "idle" }); 
-                    setPlateInput(""); 
+              <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto shrink-0 self-stretch md:self-center justify-end">
+                <Button
+                  onClick={() => {
+                    setSubscribers((prev) =>
+                      prev.map((s) =>
+                        s.id === lookup.subscriber.id ? { ...s, planUsed: s.planUsed + 1 } : s,
+                      ),
+                    );
+                    toast.success("Lavagem de assinante registrada!");
+                    setLookup({ status: "idle" });
+                    setPlateInput("");
                   }}
-                  className="bg-success text-success-foreground hover:bg-success/90"
+                  className="bg-success text-success-foreground hover:bg-success/90 font-semibold h-11 px-5 rounded-xl transition-all shadow-sm hover:shadow"
                 >
                   <CheckCircle2 className="h-4 w-4 mr-2" /> Apenas Lavagem
                 </Button>
-                <Button variant="outline" onClick={() => setSubscriberWashOpen(true)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setSubscriberWashOpen(true)}
+                  className="h-11 px-5 rounded-xl font-semibold border-muted-foreground/20 hover:bg-muted/30"
+                >
                   <Package className="h-4 w-4 mr-2" /> Lavagem + Conveniência
                 </Button>
               </div>
@@ -101,20 +363,120 @@ function OperacaoPage() {
           )}
 
           {lookup.status === "not-subscriber" && (
-            <div className="rounded-xl border-2 border-destructive bg-destructive/10 p-6 flex items-center justify-between flex-wrap gap-4 animate-fadeIn">
-              <div className="flex items-center gap-4">
-                <XCircle className="h-10 w-10 text-destructive" />
-                <div>
-                  <div className="font-mono text-3xl font-bold text-destructive">{lookup.plate}</div>
-                  <div className="text-sm mt-1">Não é assinante</div>
+            <div className="rounded-2xl border-2 border-destructive/20 bg-destructive/5 p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 animate-fadeIn shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-start gap-4 w-full">
+                <div className="p-3 bg-destructive/15 rounded-2xl text-destructive mt-1">
+                  <XCircle className="h-8 w-8" />
+                </div>
+                <div className="space-y-3 w-full">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-3xl font-black text-destructive tracking-widest">
+                        {lookup.plate}
+                      </span>
+                      <Badge variant="destructive" className="text-xs font-bold">
+                        Não Assinante
+                      </Badge>
+                    </div>
+                    {plateHistory && (
+                      <div className="bg-destructive/15 border border-destructive/30 px-4 py-2 rounded-xl inline-flex flex-col shadow-sm items-start">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-destructive/85">
+                          Chamar pelo Nome
+                        </span>
+                        <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                          <span className="text-xl font-extrabold text-foreground flex items-center gap-1.5">
+                            <User className="h-5 w-5 text-destructive shrink-0" />
+                            {plateHistory.name || "Cliente sem Identificação"}
+                          </span>
+                          {!plateHistory.name && (
+                            <Button
+                              variant="link"
+                              size="sm"
+                              className="text-brand font-bold h-auto p-0 text-xs hover:text-brand/80 underline decoration-dotted"
+                              onClick={() => setQuickRegisterOpen(true)}
+                            >
+                              Cadastro rápido
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {plateHistory && (
+                    <div className="mt-4 border border-border/80 bg-background/50 rounded-xl p-4 shadow-sm w-full max-w-lg space-y-3">
+                      <div className="flex items-center justify-between border-b pb-2 flex-wrap gap-2">
+                        <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                          <History className="h-4 w-4" /> Histórico de Visitas
+                        </div>
+                      </div>
+
+                      {plateHistory.visits === 0 ? (
+                        <div className="bg-gradient-to-r from-brand/10 to-amber-500/10 p-3.5 rounded-lg flex items-center gap-3 text-brand border border-brand/10 shadow-sm animate-pulse">
+                          <Sparkles className="h-5 w-5 text-amber-500 fill-amber-100" />
+                          <div className="space-y-0.5">
+                            <p className="font-bold text-xs text-foreground">
+                              Primeira vez na franquia! 🌟
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              Registre uma nova venda ou crie uma assinatura rápida abaixo.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-3 pt-1">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-0.5">
+                              <span className="text-[10px] text-muted-foreground block uppercase font-bold tracking-wider">
+                                Última Visita
+                              </span>
+                              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                {formatDate(plateHistory.lastVisit)}
+                              </span>
+                            </div>
+                            <div className="space-y-0.5">
+                              <span className="text-[10px] text-muted-foreground block uppercase font-bold tracking-wider">
+                                Total Visitas
+                              </span>
+                              <span className="text-xs font-bold text-brand flex items-center gap-1.5">
+                                <History className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                {plateHistory.visits}{" "}
+                                {plateHistory.visits === 1 ? "visita" : "visitas"}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="space-y-0.5 border-t pt-2 border-border/40">
+                            <span className="text-[10px] text-muted-foreground block uppercase font-bold tracking-wider">
+                              Último Consumo
+                            </span>
+                            <span className="text-xs font-semibold text-foreground flex items-start gap-1.5 leading-relaxed">
+                              <ShoppingBag className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                              <span className="break-words">
+                                {plateHistory.lastConsumed || "N/A"}
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button onClick={() => setSaleOpen(true)} className="bg-brand text-brand-foreground hover:opacity-90">
+
+              <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto shrink-0 self-stretch md:self-center justify-end">
+                <Button
+                  onClick={() => setSaleOpen(true)}
+                  className="bg-brand text-brand-foreground hover:opacity-90 font-semibold h-11 px-5 rounded-xl transition-all shadow-sm hover:shadow"
+                >
                   Lançar venda
                 </Button>
-                <Button variant="outline" onClick={() => setPlanOpen(true)}>
-                  <Sparkles className="h-4 w-4 mr-2" /> Venda rápida de assinatura
+                <Button
+                  variant="outline"
+                  onClick={() => setPlanOpen(true)}
+                  className="h-11 px-5 rounded-xl font-semibold border-muted-foreground/20 hover:bg-muted/30"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" /> Venda de Assinatura
                 </Button>
               </div>
             </div>
@@ -122,11 +484,16 @@ function OperacaoPage() {
         </CardContent>
       </Card>
 
-      <SaleDialog open={saleOpen} onOpenChange={setSaleOpen} plate={lookup.status === "not-subscriber" ? lookup.plate : ""} />
-      <QuickPlanDialog 
-        open={planOpen} 
-        onOpenChange={setPlanOpen} 
-        plate={lookup.status === "not-subscriber" ? lookup.plate : ""} 
+      <SaleDialog
+        open={saleOpen}
+        onOpenChange={setSaleOpen}
+        plate={lookup.status === "not-subscriber" ? lookup.plate : ""}
+        clientName={lookup.status === "not-subscriber" && plateHistory ? plateHistory.name : ""}
+      />
+      <QuickPlanDialog
+        open={planOpen}
+        onOpenChange={setPlanOpen}
+        plate={lookup.status === "not-subscriber" ? lookup.plate : ""}
         onSuccess={(sub) => {
           setLookup({ status: "subscriber", subscriber: sub });
           setPlanOpen(false);
@@ -143,6 +510,51 @@ function OperacaoPage() {
           setPlateInput("");
         }}
       />
+      <Dialog open={quickRegisterOpen} onOpenChange={setQuickRegisterOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cadastro Rápido de Cliente</DialogTitle>
+            <DialogDescription>
+              Vincule um nome e telefone ao veículo de placa{" "}
+              <strong className="font-mono text-foreground bg-muted px-1.5 py-0.5 rounded">
+                {lookup.status === "not-subscriber" ? lookup.plate : ""}
+              </strong>
+              .
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="qr-name">Nome Completo *</Label>
+              <Input
+                id="qr-name"
+                placeholder="Ex: Carlos Silva"
+                value={quickName}
+                onChange={(e) => setQuickName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="qr-phone">Telefone / WhatsApp *</Label>
+              <Input
+                id="qr-phone"
+                placeholder="Ex: (11) 98765-4321"
+                value={quickPhone}
+                onChange={(e) => setQuickPhone(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setQuickRegisterOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleQuickRegister}
+              className="bg-brand text-brand-foreground hover:opacity-90"
+            >
+              Salvar Cadastro
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -152,7 +564,7 @@ export function validateCoupon(
   code: string,
   coupons: Coupon[],
   franchiseId: string,
-  allowedTargets: string[]
+  allowedTargets: string[],
 ): { valid: true; coupon: Coupon } | { valid: false; reason: string } {
   const found = coupons.find((c) => c.code.toUpperCase() === code.toUpperCase().trim());
   if (!found) return { valid: false, reason: "Cupom não encontrado." };
@@ -171,7 +583,8 @@ export function validateCoupon(
 
 export function computeDiscount(coupon: Coupon | null, price: number): number {
   if (!coupon) return 0;
-  if (coupon.discountType === "percentage") return Math.min(price, price * (coupon.discountValue / 100));
+  if (coupon.discountType === "percentage")
+    return Math.min(price, price * (coupon.discountValue / 100));
   return Math.min(price, coupon.discountValue);
 }
 
@@ -237,7 +650,10 @@ export function CouponInput({
             className="pl-8 font-mono uppercase tracking-wider text-sm"
             placeholder="Código do cupom (opcional)"
             value={code}
-            onChange={(e) => { setCode(e.target.value.toUpperCase()); setError(""); }}
+            onChange={(e) => {
+              setCode(e.target.value.toUpperCase());
+              setError("");
+            }}
             onKeyDown={(e) => e.key === "Enter" && handleApply()}
           />
         </div>
@@ -257,30 +673,61 @@ export function CouponInput({
   );
 }
 
-function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange: (v: boolean) => void; plate: string }) {
+function SaleDialog({
+  open,
+  onOpenChange,
+  plate,
+  clientName,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  plate: string;
+  clientName?: string;
+}) {
   const { services, currentFranchise, profile, coupons, products, setProducts } = useApp();
+  const [salePlate, setSalePlate] = useState(plate);
+  const [saleClientName, setSaleClientName] = useState(clientName || "");
+
+  useEffect(() => {
+    if (open) {
+      setSalePlate(plate);
+      setSaleClientName(clientName || "");
+    }
+  }, [open, plate, clientName]);
+
   const [selectedServiceName, setSelectedServiceName] = useState(services[0]?.name || "Essencial");
   const [payment, setPayment] = useState<"PIX" | "Cartão" | "Dinheiro">("PIX");
   const [step, setStep] = useState<"form" | "pix" | "card" | "done">("form");
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
-  const [selectedProducts, setSelectedProducts] = useState<{ product: Product; quantity: number }[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<
+    { product: Product; quantity: number }[]
+  >([]);
   const [productSearch, setProductSearch] = useState("");
 
   // Calculate Service Price
-  const svc = services.find((s) => s.name === selectedServiceName) || services[0] || { price: 35, duration: "15 min", royaltyPercent: 10 };
-  const resolvedServicePrice = svc.priceOverrides?.[currentFranchise.id] !== undefined
-    ? svc.priceOverrides[currentFranchise.id]
-    : svc.price;
+  const svc = services.find((s) => s.name === selectedServiceName) ||
+    services[0] || { price: 35, duration: "15 min", royaltyPercent: 10 };
+  const resolvedServicePrice =
+    svc.priceOverrides?.[currentFranchise.id] !== undefined
+      ? svc.priceOverrides[currentFranchise.id]
+      : svc.price;
 
   // Products available to sell
   const availableProducts = products.filter(
-    (p) => !p.disabledIn?.includes(currentFranchise.id) && (p.stock?.[currentFranchise.id] || 0) > 0
+    (p) =>
+      !p.disabledIn?.includes(currentFranchise.id) && (p.stock?.[currentFranchise.id] || 0) > 0,
   );
 
-  const searchedProducts = productSearch.trim() === "" ? [] : availableProducts.filter(p => 
-    p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
-    (p.code && p.code.toLowerCase().includes(productSearch.toLowerCase()))
-  ).slice(0, 5); // max 5 results in dropdown
+  const searchedProducts =
+    productSearch.trim() === ""
+      ? []
+      : availableProducts
+          .filter(
+            (p) =>
+              p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+              (p.code && p.code.toLowerCase().includes(productSearch.toLowerCase())),
+          )
+          .slice(0, 5); // max 5 results in dropdown
 
   // Calculate Products Price
   const productsTotalPrice = selectedProducts.reduce((acc, item) => {
@@ -289,24 +736,25 @@ function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange
   }, 0);
 
   const subtotal = resolvedServicePrice + productsTotalPrice;
-  
+
   const discount = useMemo(() => {
     if (!appliedCoupon) return 0;
     let targetPrice = 0;
     if (appliedCoupon.target === "Serviço") targetPrice = resolvedServicePrice;
     else if (appliedCoupon.target === "Produto") targetPrice = productsTotalPrice;
     else targetPrice = subtotal; // "Todos"
-    
+
     return computeDiscount(appliedCoupon, targetPrice);
   }, [appliedCoupon, resolvedServicePrice, productsTotalPrice, subtotal]);
 
   const finalPrice = Math.max(0, subtotal - discount);
 
   // Calculate Royalties
-  const serviceRoyalty = resolvedServicePrice * ((svc.royaltyPercent ?? currentFranchise.royaltyFeePercent) / 100);
+  const serviceRoyalty =
+    resolvedServicePrice * ((svc.royaltyPercent ?? currentFranchise.royaltyFeePercent) / 100);
   const productsRoyalty = selectedProducts.reduce((acc, item) => {
     const price = item.product.priceOverrides?.[currentFranchise.id] ?? item.product.basePrice;
-    return acc + (price * item.quantity * (item.product.royaltyFee / 100));
+    return acc + price * item.quantity * (item.product.royaltyFee / 100);
   }, 0);
   const totalRoyalty = serviceRoyalty + productsRoyalty;
 
@@ -333,7 +781,7 @@ function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange
             };
           }
           return p;
-        })
+        }),
       );
     }
     toast.success("Venda registrada com sucesso");
@@ -346,7 +794,12 @@ function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange
     setSelectedProducts([]);
     setProductSearch("");
     onOpenChange(false);
-    setTimeout(() => { setSelectedServiceName(services[0]?.name || "Essencial"); setPayment("PIX"); }, 200);
+    setTimeout(() => {
+      setSelectedServiceName(services[0]?.name || "Essencial");
+      setPayment("PIX");
+      setSalePlate("");
+      setSaleClientName("");
+    }, 200);
   }
 
   function addProduct(product: Product) {
@@ -358,7 +811,9 @@ function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange
           toast.error("Estoque insuficiente");
           return prev;
         }
-        return prev.map((p) => (p.product.id === product.id ? { ...p, quantity: p.quantity + 1 } : p));
+        return prev.map((p) =>
+          p.product.id === product.id ? { ...p, quantity: p.quantity + 1 } : p,
+        );
       }
       return [...prev, { product, quantity: 1 }];
     });
@@ -368,36 +823,71 @@ function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange
     setSelectedProducts((prev) => {
       const existing = prev.find((p) => p.product.id === productId);
       if (existing && existing.quantity > 1) {
-        return prev.map((p) => (p.product.id === productId ? { ...p, quantity: p.quantity - 1 } : p));
+        return prev.map((p) =>
+          p.product.id === productId ? { ...p, quantity: p.quantity - 1 } : p,
+        );
       }
       return prev.filter((p) => p.product.id !== productId);
     });
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); else onOpenChange(v); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) reset();
+        else onOpenChange(v);
+      }}
+    >
       <DialogContent className="max-w-5xl">
         {step === "form" && (
           <>
             <DialogHeader>
               <DialogTitle className="text-2xl">Lançar venda</DialogTitle>
-              <DialogDescription>Placa do veículo: <span className="font-mono font-bold text-foreground text-base bg-muted px-2 py-1 rounded">{plate}</span></DialogDescription>
+              <DialogDescription>
+                Preencha os dados do cliente e selecione os serviços.
+              </DialogDescription>
             </DialogHeader>
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 mt-2">
-              {/* Left Column: Services & Products */}
               <div className="lg:col-span-3 space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label>Placa do Veículo *</Label>
+                    <Input
+                      value={salePlate}
+                      onChange={(e) => setSalePlate(e.target.value.toUpperCase())}
+                      className="font-mono uppercase"
+                      placeholder="ABC1D23"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Nome do Cliente</Label>
+                    <Input
+                      value={saleClientName}
+                      onChange={(e) => setSaleClientName(e.target.value)}
+                      placeholder="Opcional"
+                    />
+                  </div>
+                </div>
+
                 {/* Service Cards */}
                 <div>
-                  <Label className="text-base font-semibold mb-3 block">1. Selecione o Serviço</Label>
+                  <Label className="text-base font-semibold mb-3 block">
+                    1. Selecione o Serviço
+                  </Label>
                   <div className="grid grid-cols-2 gap-3">
                     {services.map((s) => {
-                      const priceForCurrentFranchise = s.priceOverrides?.[currentFranchise.id] ?? s.price;
+                      const priceForCurrentFranchise =
+                        s.priceOverrides?.[currentFranchise.id] ?? s.price;
                       const isSelected = selectedServiceName === s.name;
                       return (
-                        <div 
-                          key={s.name} 
-                          onClick={() => { setSelectedServiceName(s.name); setAppliedCoupon(null); }}
+                        <div
+                          key={s.name}
+                          onClick={() => {
+                            setSelectedServiceName(s.name);
+                            setAppliedCoupon(null);
+                          }}
                           className={`relative p-5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col gap-2 overflow-hidden ${isSelected ? "border-brand bg-brand/5 shadow-md scale-[1.02]" : "border-muted bg-background hover:border-brand/40 hover:shadow-sm"}`}
                         >
                           {isSelected && (
@@ -410,13 +900,27 @@ function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange
                               <Flame className="h-3 w-3 fill-orange-500" /> Hot
                             </div>
                           )}
-                          <div className={`flex flex-col ${isSelected ? 'mt-6' : 'mt-2'} transition-all`}>
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Lavagem</span>
-                            <span className={`font-black text-2xl leading-none mt-1 ${isSelected ? "text-brand" : "text-foreground"}`}>{s.name}</span>
+                          <div
+                            className={`flex flex-col ${isSelected ? "mt-6" : "mt-2"} transition-all`}
+                          >
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                              Lavagem
+                            </span>
+                            <span
+                              className={`font-black text-2xl leading-none mt-1 ${isSelected ? "text-brand" : "text-foreground"}`}
+                            >
+                              {s.name}
+                            </span>
                           </div>
                           <div className="flex items-center justify-between mt-auto pt-4 border-t border-muted/50">
-                            <span className={`text-xl font-extrabold tracking-tight ${isSelected ? "text-brand" : "text-foreground"}`}>{formatBRL(priceForCurrentFranchise)}</span>
-                            <span className="text-xs text-muted-foreground bg-muted/40 px-2 py-1 rounded-md font-medium">{s.duration}</span>
+                            <span
+                              className={`text-xl font-extrabold tracking-tight ${isSelected ? "text-brand" : "text-foreground"}`}
+                            >
+                              {formatBRL(priceForCurrentFranchise)}
+                            </span>
+                            <span className="text-xs text-muted-foreground bg-muted/40 px-2 py-1 rounded-md font-medium">
+                              {s.duration}
+                            </span>
                           </div>
                         </div>
                       );
@@ -427,29 +931,50 @@ function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange
                 {/* Products */}
                 {availableProducts.length > 0 && (
                   <div>
-                    <Label className="text-base font-semibold mb-3 block">2. Conveniência (Opcional)</Label>
+                    <Label className="text-base font-semibold mb-3 block">
+                      2. Conveniência (Opcional)
+                    </Label>
                     <div className="space-y-4">
                       {/* Search */}
                       <div className="relative">
                         <Search className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                        <Input 
-                          placeholder="Buscar produto por nome ou código..." 
-                          className="pl-10 h-12 text-base" 
-                          value={productSearch} 
-                          onChange={(e) => setProductSearch(e.target.value)} 
+                        <Input
+                          placeholder="Buscar produto por nome ou código..."
+                          className="pl-10 h-12 text-base"
+                          value={productSearch}
+                          onChange={(e) => setProductSearch(e.target.value)}
                         />
                         {productSearch && (
                           <div className="absolute z-10 w-full mt-2 bg-background border rounded-lg shadow-xl max-h-60 overflow-y-auto">
-                            {searchedProducts.map(p => (
-                              <div key={p.id} onClick={() => { addProduct(p); setProductSearch(""); }} className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center text-sm border-b last:border-0">
+                            {searchedProducts.map((p) => (
+                              <div
+                                key={p.id}
+                                onClick={() => {
+                                  addProduct(p);
+                                  setProductSearch("");
+                                }}
+                                className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center text-sm border-b last:border-0"
+                              >
                                 <div>
                                   <p className="font-medium text-base">{p.name}</p>
-                                  {p.code && <p className="text-xs text-muted-foreground mt-0.5">Cód: {p.code}</p>}
+                                  {p.code && (
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      Cód: {p.code}
+                                    </p>
+                                  )}
                                 </div>
-                                <span className="font-bold text-base">{formatBRL(p.priceOverrides?.[currentFranchise.id] ?? p.basePrice)}</span>
+                                <span className="font-bold text-base">
+                                  {formatBRL(
+                                    p.priceOverrides?.[currentFranchise.id] ?? p.basePrice,
+                                  )}
+                                </span>
                               </div>
                             ))}
-                            {searchedProducts.length === 0 && <div className="p-6 text-sm text-muted-foreground text-center">Nenhum produto encontrado.</div>}
+                            {searchedProducts.length === 0 && (
+                              <div className="p-6 text-sm text-muted-foreground text-center">
+                                Nenhum produto encontrado.
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -457,18 +982,28 @@ function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange
                       {/* Top 4 Quick Add */}
                       {!productSearch && (
                         <div className="grid grid-cols-4 gap-2">
-                          {availableProducts.slice(0, 4).map(p => {
+                          {availableProducts.slice(0, 4).map((p) => {
                             const stock = p.stock?.[currentFranchise.id] || 0;
                             return (
-                              <div key={p.id} onClick={() => addProduct(p)} className="relative bg-background border-2 rounded-xl p-3 hover:border-brand hover:shadow-md cursor-pointer transition-all flex flex-col h-full text-center group">
+                              <div
+                                key={p.id}
+                                onClick={() => addProduct(p)}
+                                className="relative bg-background border-2 rounded-xl p-3 hover:border-brand hover:shadow-md cursor-pointer transition-all flex flex-col h-full text-center group"
+                              >
                                 {p.isHot && (
                                   <div className="absolute -top-2 -right-2 bg-gradient-to-br from-orange-400 to-orange-600 text-white p-1.5 rounded-full shadow-md z-10">
                                     <Flame className="h-3 w-3 fill-white" />
                                   </div>
                                 )}
                                 <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40 group-hover:text-brand transition-colors" />
-                                <p className="font-semibold text-xs leading-tight line-clamp-2 flex-1 text-foreground/80">{p.name}</p>
-                                <span className="font-black text-sm mt-2 block text-brand">{formatBRL(p.priceOverrides?.[currentFranchise.id] ?? p.basePrice)}</span>
+                                <p className="font-semibold text-xs leading-tight line-clamp-2 flex-1 text-foreground/80">
+                                  {p.name}
+                                </p>
+                                <span className="font-black text-sm mt-2 block text-brand">
+                                  {formatBRL(
+                                    p.priceOverrides?.[currentFranchise.id] ?? p.basePrice,
+                                  )}
+                                </span>
                               </div>
                             );
                           })}
@@ -486,35 +1021,60 @@ function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange
                     <ShoppingCart className="h-5 w-5" /> Resumo do Pedido
                   </h3>
                 </div>
-                
+
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
                   {/* Cart Items */}
                   <div className="space-y-3">
                     <div className="flex justify-between items-center pb-2 border-b">
                       <div>
                         <div className="font-semibold text-sm">Lavagem {selectedServiceName}</div>
-                        <div className="text-xs text-muted-foreground">Veículo: {plate}</div>
+                        <div className="text-xs text-muted-foreground">
+                          Veículo: {salePlate || "Não informada"}
+                        </div>
                       </div>
                       <div className="font-bold">{formatBRL(resolvedServicePrice)}</div>
                     </div>
 
                     {selectedProducts.map((sp) => {
-                      const productPrice = sp.product.priceOverrides?.[currentFranchise.id] ?? sp.product.basePrice;
+                      const productPrice =
+                        sp.product.priceOverrides?.[currentFranchise.id] ?? sp.product.basePrice;
                       const stock = sp.product.stock?.[currentFranchise.id] || 0;
                       return (
-                        <div key={sp.product.id} className="flex justify-between items-center pb-2 border-b">
+                        <div
+                          key={sp.product.id}
+                          className="flex justify-between items-center pb-2 border-b"
+                        >
                           <div className="flex-1 min-w-0 pr-2">
                             <div className="font-medium text-sm truncate">{sp.product.name}</div>
-                            <div className="text-xs text-muted-foreground">{formatBRL(productPrice)} un.</div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatBRL(productPrice)} un.
+                            </div>
                           </div>
                           <div className="flex flex-col items-end gap-1">
-                            <div className="font-bold text-sm">{formatBRL(productPrice * sp.quantity)}</div>
+                            <div className="font-bold text-sm">
+                              {formatBRL(productPrice * sp.quantity)}
+                            </div>
                             <div className="flex items-center gap-1 bg-background rounded-md border p-0.5">
-                              <Button type="button" variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => removeProduct(sp.product.id)}>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 rounded-sm"
+                                onClick={() => removeProduct(sp.product.id)}
+                              >
                                 <Minus className="h-2 w-2" />
                               </Button>
-                              <span className="font-mono text-xs w-4 text-center">{sp.quantity}</span>
-                              <Button type="button" variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => addProduct(sp.product)} disabled={sp.quantity >= stock}>
+                              <span className="font-mono text-xs w-4 text-center">
+                                {sp.quantity}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 rounded-sm"
+                                onClick={() => addProduct(sp.product)}
+                                disabled={sp.quantity >= stock}
+                              >
                                 <Plus className="h-2 w-2" />
                               </Button>
                             </div>
@@ -528,7 +1088,9 @@ function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange
                 {/* Footer Payment Info */}
                 <div className="p-4 bg-muted/30 border-t space-y-4 mt-auto">
                   <div>
-                    <Label className="text-xs text-muted-foreground mb-1 block">Cupom de Desconto</Label>
+                    <Label className="text-xs text-muted-foreground mb-1 block">
+                      Cupom de Desconto
+                    </Label>
                     <CouponInput
                       franchiseId={currentFranchise.id}
                       coupons={coupons}
@@ -540,14 +1102,23 @@ function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange
                   </div>
 
                   <div>
-                    <Label className="text-xs text-muted-foreground mb-1.5 block">Forma de Pagamento</Label>
-                    <RadioGroup value={payment} onValueChange={(v) => setPayment(v as typeof payment)} className="flex gap-2">
+                    <Label className="text-xs text-muted-foreground mb-1.5 block">
+                      Forma de Pagamento
+                    </Label>
+                    <RadioGroup
+                      value={payment}
+                      onValueChange={(v) => setPayment(v as typeof payment)}
+                      className="flex gap-2"
+                    >
                       {[
                         { v: "PIX", icon: QrCode },
                         { v: "Cartão", icon: CreditCard },
                         { v: "Dinheiro", icon: Banknote },
                       ].map(({ v, icon: I }) => (
-                        <label key={v} className={`flex-1 flex flex-col items-center gap-1 rounded-lg border-2 p-2 cursor-pointer transition-colors ${payment === v ? "border-brand bg-brand/5 text-brand" : "border-muted hover:bg-muted/50 text-muted-foreground"}`}>
+                        <label
+                          key={v}
+                          className={`flex-1 flex flex-col items-center gap-1 rounded-lg border-2 p-2 cursor-pointer transition-colors ${payment === v ? "border-brand bg-brand/5 text-brand" : "border-muted hover:bg-muted/50 text-muted-foreground"}`}
+                        >
                           <RadioGroupItem value={v} className="sr-only" />
                           <I className="h-4 w-4" />
                           <span className="text-[10px] font-bold uppercase">{v}</span>
@@ -582,8 +1153,13 @@ function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange
                   </div>
 
                   <div className="flex gap-2 pt-2">
-                    <Button variant="outline" onClick={reset} className="flex-1">Cancelar</Button>
-                    <Button onClick={confirm} className="flex-[2] bg-brand text-brand-foreground hover:opacity-90 font-bold text-base h-11">
+                    <Button variant="outline" onClick={reset} className="flex-1">
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={confirm}
+                      className="flex-[2] bg-brand text-brand-foreground hover:opacity-90 font-bold text-base h-11"
+                    >
                       Cobrar {formatBRL(finalPrice)}
                     </Button>
                   </div>
@@ -594,7 +1170,9 @@ function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange
         )}
         {step === "pix" && (
           <>
-            <DialogHeader><DialogTitle>Pague com PIX</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>Pague com PIX</DialogTitle>
+            </DialogHeader>
             <div className="flex flex-col items-center gap-3 py-4">
               <div className="p-4 bg-white rounded-lg border">
                 <QrCodeSvg />
@@ -605,8 +1183,13 @@ function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={reset}>Cancelar</Button>
-              <Button onClick={finalizeSale} className="bg-success text-success-foreground hover:opacity-90">
+              <Button variant="outline" onClick={reset}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={finalizeSale}
+                className="bg-success text-success-foreground hover:opacity-90"
+              >
                 Simular pagamento
               </Button>
             </DialogFooter>
@@ -614,15 +1197,26 @@ function SaleDialog({ open, onOpenChange, plate }: { open: boolean; onOpenChange
         )}
         {step === "card" && (
           <>
-            <DialogHeader><DialogTitle>Cartão — Maquininha</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>Cartão — Maquininha</DialogTitle>
+            </DialogHeader>
             <div className="flex flex-col items-center gap-3 py-8">
               <CreditCard className="h-16 w-16 text-brand animate-pulse" />
-              <div className="text-lg font-semibold">Enviando {formatBRL(finalPrice)} para a maquininha…</div>
-              <div className="text-sm text-muted-foreground">Aproxime, insira ou passe o cartão.</div>
+              <div className="text-lg font-semibold">
+                Enviando {formatBRL(finalPrice)} para a maquininha…
+              </div>
+              <div className="text-sm text-muted-foreground">
+                Aproxime, insira ou passe o cartão.
+              </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={reset}>Cancelar</Button>
-              <Button onClick={finalizeSale} className="bg-success text-success-foreground hover:opacity-90">
+              <Button variant="outline" onClick={reset}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={finalizeSale}
+                className="bg-success text-success-foreground hover:opacity-90"
+              >
                 Simular aprovação
               </Button>
             </DialogFooter>
@@ -638,7 +1232,7 @@ function SubscriberWashDialog({
   onOpenChange,
   plate,
   subscriber,
-  onSuccess
+  onSuccess,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -650,17 +1244,26 @@ function SubscriberWashDialog({
   const [payment, setPayment] = useState<"PIX" | "Cartão" | "Dinheiro">("Cartão");
   const [step, setStep] = useState<"form" | "pix" | "card">("form");
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
-  const [selectedProducts, setSelectedProducts] = useState<{ product: Product; quantity: number }[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<
+    { product: Product; quantity: number }[]
+  >([]);
   const [productSearch, setProductSearch] = useState("");
 
   const availableProducts = products.filter(
-    (p) => !p.disabledIn?.includes(currentFranchise.id) && (p.stock?.[currentFranchise.id] || 0) > 0
+    (p) =>
+      !p.disabledIn?.includes(currentFranchise.id) && (p.stock?.[currentFranchise.id] || 0) > 0,
   );
 
-  const searchedProducts = productSearch.trim() === "" ? [] : availableProducts.filter(p => 
-    p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
-    (p.code && p.code.toLowerCase().includes(productSearch.toLowerCase()))
-  ).slice(0, 5);
+  const searchedProducts =
+    productSearch.trim() === ""
+      ? []
+      : availableProducts
+          .filter(
+            (p) =>
+              p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+              (p.code && p.code.toLowerCase().includes(productSearch.toLowerCase())),
+          )
+          .slice(0, 5);
 
   const productsTotalPrice = selectedProducts.reduce((acc, item) => {
     const price = item.product.priceOverrides?.[currentFranchise.id] ?? item.product.basePrice;
@@ -672,7 +1275,7 @@ function SubscriberWashDialog({
 
   const productsRoyalty = selectedProducts.reduce((acc, item) => {
     const price = item.product.priceOverrides?.[currentFranchise.id] ?? item.product.basePrice;
-    return acc + (price * item.quantity * (item.product.royaltyFee / 100));
+    return acc + price * item.quantity * (item.product.royaltyFee / 100);
   }, 0);
 
   function confirm() {
@@ -696,21 +1299,24 @@ function SubscriberWashDialog({
             const currentStock = p.stock?.[currentFranchise.id] || 0;
             return {
               ...p,
-              stock: { ...p.stock, [currentFranchise.id]: Math.max(0, currentStock - soldItem.quantity) },
+              stock: {
+                ...p.stock,
+                [currentFranchise.id]: Math.max(0, currentStock - soldItem.quantity),
+              },
             };
           }
           return p;
-        })
+        }),
       );
     }
-    
+
     // Register wash
     if (subscriber) {
       setSubscribers((prev) =>
-        prev.map((s) => (s.id === subscriber.id ? { ...s, planUsed: s.planUsed + 1 } : s))
+        prev.map((s) => (s.id === subscriber.id ? { ...s, planUsed: s.planUsed + 1 } : s)),
       );
     }
-    
+
     toast.success("Lavagem de assinante registrada com sucesso!");
     onSuccess();
     reset();
@@ -722,7 +1328,9 @@ function SubscriberWashDialog({
     setSelectedProducts([]);
     setProductSearch("");
     onOpenChange(false);
-    setTimeout(() => { setPayment("Cartão"); }, 200);
+    setTimeout(() => {
+      setPayment("Cartão");
+    }, 200);
   }
 
   function addProduct(product: Product) {
@@ -730,8 +1338,13 @@ function SubscriberWashDialog({
       const existing = prev.find((p) => p.product.id === product.id);
       if (existing) {
         const maxStock = product.stock?.[currentFranchise.id] || 0;
-        if (existing.quantity >= maxStock) { toast.error("Estoque insuficiente"); return prev; }
-        return prev.map((p) => (p.product.id === product.id ? { ...p, quantity: p.quantity + 1 } : p));
+        if (existing.quantity >= maxStock) {
+          toast.error("Estoque insuficiente");
+          return prev;
+        }
+        return prev.map((p) =>
+          p.product.id === product.id ? { ...p, quantity: p.quantity + 1 } : p,
+        );
       }
       return [...prev, { product, quantity: 1 }];
     });
@@ -741,78 +1354,128 @@ function SubscriberWashDialog({
     setSelectedProducts((prev) => {
       const existing = prev.find((p) => p.product.id === productId);
       if (existing && existing.quantity > 1) {
-        return prev.map((p) => (p.product.id === productId ? { ...p, quantity: p.quantity - 1 } : p));
+        return prev.map((p) =>
+          p.product.id === productId ? { ...p, quantity: p.quantity - 1 } : p,
+        );
       }
       return prev.filter((p) => p.product.id !== productId);
     });
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); else onOpenChange(v); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) reset();
+        else onOpenChange(v);
+      }}
+    >
       <DialogContent className="max-w-5xl">
         {step === "form" && (
           <>
             <DialogHeader>
               <DialogTitle className="text-2xl">Lavagem Inclusa — Assinante</DialogTitle>
-              <DialogDescription>Placa do veículo: <span className="font-mono font-bold text-success text-base bg-success/10 px-2 py-1 rounded border border-success/20">{plate}</span></DialogDescription>
+              <DialogDescription>
+                Placa do veículo:{" "}
+                <span className="font-mono font-bold text-success text-base bg-success/10 px-2 py-1 rounded border border-success/20">
+                  {plate}
+                </span>
+              </DialogDescription>
             </DialogHeader>
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 mt-2">
               <div className="lg:col-span-3 space-y-6">
                 <div>
                   <Label className="text-base font-semibold mb-3 block">1. Serviço Inserido</Label>
                   <div className="relative p-4 rounded-xl border-2 border-success bg-success/5 flex flex-col gap-2">
                     <div className="absolute top-3 right-3 h-3 w-3 rounded-full bg-success" />
-                    <div className="font-bold text-lg text-success leading-tight">Lavagem do Plano<br/>(Inclusa)</div>
+                    <div className="font-bold text-lg text-success leading-tight">
+                      Lavagem do Plano
+                      <br />
+                      (Inclusa)
+                    </div>
                     <div className="flex items-center justify-between mt-auto pt-2">
                       <span className="text-xl font-black text-success">R$ 0,00</span>
-                      <span className="text-xs text-success/80 bg-success/10 px-2 py-1 rounded border border-success/20">Assinante: {subscriber?.name}</span>
+                      <span className="text-xs text-success/80 bg-success/10 px-2 py-1 rounded border border-success/20">
+                        Assinante: {subscriber?.name}
+                      </span>
                     </div>
                   </div>
                 </div>
 
                 {availableProducts.length > 0 && (
                   <div>
-                    <Label className="text-base font-semibold mb-3 block">2. Adicionar Conveniência (Opcional)</Label>
+                    <Label className="text-base font-semibold mb-3 block">
+                      2. Adicionar Conveniência (Opcional)
+                    </Label>
                     <div className="space-y-4">
                       <div className="relative">
                         <Search className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                        <Input 
-                          placeholder="Buscar produto por nome ou código..." 
-                          className="pl-10 h-12 text-base" 
-                          value={productSearch} 
-                          onChange={(e) => setProductSearch(e.target.value)} 
+                        <Input
+                          placeholder="Buscar produto por nome ou código..."
+                          className="pl-10 h-12 text-base"
+                          value={productSearch}
+                          onChange={(e) => setProductSearch(e.target.value)}
                         />
                         {productSearch && (
                           <div className="absolute z-10 w-full mt-2 bg-background border rounded-lg shadow-xl max-h-60 overflow-y-auto">
-                            {searchedProducts.map(p => (
-                              <div key={p.id} onClick={() => { addProduct(p); setProductSearch(""); }} className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center text-sm border-b last:border-0">
+                            {searchedProducts.map((p) => (
+                              <div
+                                key={p.id}
+                                onClick={() => {
+                                  addProduct(p);
+                                  setProductSearch("");
+                                }}
+                                className="p-3 hover:bg-muted cursor-pointer flex justify-between items-center text-sm border-b last:border-0"
+                              >
                                 <div>
                                   <p className="font-medium text-base">{p.name}</p>
-                                  {p.code && <p className="text-xs text-muted-foreground mt-0.5">Cód: {p.code}</p>}
+                                  {p.code && (
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      Cód: {p.code}
+                                    </p>
+                                  )}
                                 </div>
-                                <span className="font-bold text-base">{formatBRL(p.priceOverrides?.[currentFranchise.id] ?? p.basePrice)}</span>
+                                <span className="font-bold text-base">
+                                  {formatBRL(
+                                    p.priceOverrides?.[currentFranchise.id] ?? p.basePrice,
+                                  )}
+                                </span>
                               </div>
                             ))}
-                            {searchedProducts.length === 0 && <div className="p-6 text-sm text-muted-foreground text-center">Nenhum produto encontrado.</div>}
+                            {searchedProducts.length === 0 && (
+                              <div className="p-6 text-sm text-muted-foreground text-center">
+                                Nenhum produto encontrado.
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
 
                       {!productSearch && (
                         <div className="grid grid-cols-4 gap-2">
-                          {availableProducts.slice(0, 4).map(p => {
+                          {availableProducts.slice(0, 4).map((p) => {
                             const stock = p.stock?.[currentFranchise.id] || 0;
                             return (
-                              <div key={p.id} onClick={() => addProduct(p)} className="relative bg-background border-2 rounded-xl p-3 hover:border-brand hover:shadow-md cursor-pointer transition-all flex flex-col h-full text-center group">
+                              <div
+                                key={p.id}
+                                onClick={() => addProduct(p)}
+                                className="relative bg-background border-2 rounded-xl p-3 hover:border-brand hover:shadow-md cursor-pointer transition-all flex flex-col h-full text-center group"
+                              >
                                 {p.isHot && (
                                   <div className="absolute -top-2 -right-2 bg-gradient-to-br from-orange-400 to-orange-600 text-white p-1.5 rounded-full shadow-md z-10">
                                     <Flame className="h-3 w-3 fill-white" />
                                   </div>
                                 )}
                                 <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40 group-hover:text-brand transition-colors" />
-                                <p className="font-semibold text-xs leading-tight line-clamp-2 flex-1 text-foreground/80">{p.name}</p>
-                                <span className="font-black text-sm mt-2 block text-brand">{formatBRL(p.priceOverrides?.[currentFranchise.id] ?? p.basePrice)}</span>
+                                <p className="font-semibold text-xs leading-tight line-clamp-2 flex-1 text-foreground/80">
+                                  {p.name}
+                                </p>
+                                <span className="font-black text-sm mt-2 block text-brand">
+                                  {formatBRL(
+                                    p.priceOverrides?.[currentFranchise.id] ?? p.basePrice,
+                                  )}
+                                </span>
                               </div>
                             );
                           })}
@@ -829,7 +1492,7 @@ function SubscriberWashDialog({
                     <ShoppingCart className="h-5 w-5" /> Resumo do Pedido
                   </h3>
                 </div>
-                
+
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
                   <div className="space-y-3">
                     <div className="flex justify-between items-center pb-2 border-b">
@@ -841,22 +1504,45 @@ function SubscriberWashDialog({
                     </div>
 
                     {selectedProducts.map((sp) => {
-                      const productPrice = sp.product.priceOverrides?.[currentFranchise.id] ?? sp.product.basePrice;
+                      const productPrice =
+                        sp.product.priceOverrides?.[currentFranchise.id] ?? sp.product.basePrice;
                       const stock = sp.product.stock?.[currentFranchise.id] || 0;
                       return (
-                        <div key={sp.product.id} className="flex justify-between items-center pb-2 border-b">
+                        <div
+                          key={sp.product.id}
+                          className="flex justify-between items-center pb-2 border-b"
+                        >
                           <div className="flex-1 min-w-0 pr-2">
                             <div className="font-medium text-sm truncate">{sp.product.name}</div>
-                            <div className="text-xs text-muted-foreground">{formatBRL(productPrice)} un.</div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatBRL(productPrice)} un.
+                            </div>
                           </div>
                           <div className="flex flex-col items-end gap-1">
-                            <div className="font-bold text-sm">{formatBRL(productPrice * sp.quantity)}</div>
+                            <div className="font-bold text-sm">
+                              {formatBRL(productPrice * sp.quantity)}
+                            </div>
                             <div className="flex items-center gap-1 bg-background rounded-md border p-0.5">
-                              <Button type="button" variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => removeProduct(sp.product.id)}>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 rounded-sm"
+                                onClick={() => removeProduct(sp.product.id)}
+                              >
                                 <Minus className="h-2 w-2" />
                               </Button>
-                              <span className="font-mono text-xs w-4 text-center">{sp.quantity}</span>
-                              <Button type="button" variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => addProduct(sp.product)} disabled={sp.quantity >= stock}>
+                              <span className="font-mono text-xs w-4 text-center">
+                                {sp.quantity}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 rounded-sm"
+                                onClick={() => addProduct(sp.product)}
+                                disabled={sp.quantity >= stock}
+                              >
                                 <Plus className="h-2 w-2" />
                               </Button>
                             </div>
@@ -871,7 +1557,9 @@ function SubscriberWashDialog({
                   {selectedProducts.length > 0 && (
                     <>
                       <div>
-                        <Label className="text-xs text-muted-foreground mb-1 block">Cupom de Desconto</Label>
+                        <Label className="text-xs text-muted-foreground mb-1 block">
+                          Cupom de Desconto
+                        </Label>
                         <CouponInput
                           franchiseId={currentFranchise.id}
                           coupons={coupons}
@@ -883,14 +1571,23 @@ function SubscriberWashDialog({
                       </div>
 
                       <div>
-                        <Label className="text-xs text-muted-foreground mb-1.5 block">Forma de Pagamento (Avulsos)</Label>
-                        <RadioGroup value={payment} onValueChange={(v) => setPayment(v as typeof payment)} className="flex gap-2">
+                        <Label className="text-xs text-muted-foreground mb-1.5 block">
+                          Forma de Pagamento (Avulsos)
+                        </Label>
+                        <RadioGroup
+                          value={payment}
+                          onValueChange={(v) => setPayment(v as typeof payment)}
+                          className="flex gap-2"
+                        >
                           {[
                             { v: "PIX", icon: QrCode },
                             { v: "Cartão", icon: CreditCard },
                             { v: "Dinheiro", icon: Banknote },
                           ].map(({ v, icon: I }) => (
-                            <label key={v} className={`flex-1 flex flex-col items-center gap-1 rounded-lg border-2 p-2 cursor-pointer transition-colors ${payment === v ? "border-brand bg-brand/5 text-brand" : "border-muted hover:bg-muted/50 text-muted-foreground"}`}>
+                            <label
+                              key={v}
+                              className={`flex-1 flex flex-col items-center gap-1 rounded-lg border-2 p-2 cursor-pointer transition-colors ${payment === v ? "border-brand bg-brand/5 text-brand" : "border-muted hover:bg-muted/50 text-muted-foreground"}`}
+                            >
                               <RadioGroupItem value={v} className="sr-only" />
                               <I className="h-4 w-4" />
                               <span className="text-[10px] font-bold uppercase">{v}</span>
@@ -927,13 +1624,21 @@ function SubscriberWashDialog({
                   )}
 
                   <div className="flex gap-2 pt-2">
-                    <Button variant="outline" onClick={reset} className="flex-1">Cancelar</Button>
+                    <Button variant="outline" onClick={reset} className="flex-1">
+                      Cancelar
+                    </Button>
                     {finalPrice === 0 ? (
-                      <Button onClick={confirm} className="flex-[2] bg-success text-success-foreground hover:bg-success/90 font-bold text-base h-11">
+                      <Button
+                        onClick={confirm}
+                        className="flex-[2] bg-success text-success-foreground hover:bg-success/90 font-bold text-base h-11"
+                      >
                         Confirmar Lavagem Inclusa
                       </Button>
                     ) : (
-                      <Button onClick={confirm} className="flex-[2] bg-brand text-brand-foreground hover:opacity-90 font-bold text-base h-11">
+                      <Button
+                        onClick={confirm}
+                        className="flex-[2] bg-brand text-brand-foreground hover:opacity-90 font-bold text-base h-11"
+                      >
                         Cobrar {formatBRL(finalPrice)}
                       </Button>
                     )}
@@ -945,7 +1650,9 @@ function SubscriberWashDialog({
         )}
         {step === "pix" && (
           <>
-            <DialogHeader><DialogTitle>Pague com PIX</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>Pague com PIX</DialogTitle>
+            </DialogHeader>
             <div className="flex flex-col items-center gap-3 py-4">
               <div className="p-4 bg-white rounded-lg border">
                 <QrCodeSvg />
@@ -956,8 +1663,13 @@ function SubscriberWashDialog({
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={reset}>Cancelar</Button>
-              <Button onClick={finalizeWash} className="bg-success text-success-foreground hover:opacity-90">
+              <Button variant="outline" onClick={reset}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={finalizeWash}
+                className="bg-success text-success-foreground hover:opacity-90"
+              >
                 Simular pagamento
               </Button>
             </DialogFooter>
@@ -965,15 +1677,26 @@ function SubscriberWashDialog({
         )}
         {step === "card" && (
           <>
-            <DialogHeader><DialogTitle>Cartão — Maquininha</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>Cartão — Maquininha</DialogTitle>
+            </DialogHeader>
             <div className="flex flex-col items-center gap-3 py-8">
               <CreditCard className="h-16 w-16 text-brand animate-pulse" />
-              <div className="text-lg font-semibold">Enviando {formatBRL(finalPrice)} para a maquininha…</div>
-              <div className="text-sm text-muted-foreground">Aproxime, insira ou passe o cartão.</div>
+              <div className="text-lg font-semibold">
+                Enviando {formatBRL(finalPrice)} para a maquininha…
+              </div>
+              <div className="text-sm text-muted-foreground">
+                Aproxime, insira ou passe o cartão.
+              </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={reset}>Cancelar</Button>
-              <Button onClick={finalizeWash} className="bg-success text-success-foreground hover:opacity-90">
+              <Button variant="outline" onClick={reset}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={finalizeWash}
+                className="bg-success text-success-foreground hover:opacity-90"
+              >
                 Simular aprovação
               </Button>
             </DialogFooter>
@@ -984,11 +1707,23 @@ function SubscriberWashDialog({
   );
 }
 
-function QuickPlanDialog({ open, onOpenChange, plate, onSuccess }: { open: boolean; onOpenChange: (v: boolean) => void; plate: string; onSuccess: (sub: any) => void }) {
-  const { setSubscribers, setClients, clients, currentFranchise, plans, profile, coupons } = useApp();
+function QuickPlanDialog({
+  open,
+  onOpenChange,
+  plate,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  plate: string;
+  onSuccess: (sub: any) => void;
+}) {
+  const { setSubscribers, setClients, clients, currentFranchise, plans, profile, coupons } =
+    useApp();
   const [docType, setDocType] = useState<"cpf" | "cnpj">("cpf");
   const [payment, setPayment] = useState<"PIX" | "Cartão" | "Boleto">("Cartão");
-  const availablePayments = docType === "cnpj" ? ["PIX", "Cartão", "Boleto"] as const : ["Cartão"] as const;
+  const availablePayments =
+    docType === "cnpj" ? (["PIX", "Cartão", "Boleto"] as const) : (["Cartão"] as const);
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [step, setStep] = useState<"form" | "card">("form");
 
@@ -1000,9 +1735,10 @@ function QuickPlanDialog({ open, onOpenChange, plate, onSuccess }: { open: boole
   const [cnpj, setCnpj] = useState("");
 
   const defaultPlan = plans[0] || { price: 199, lavagesIncluded: 8 };
-  const resolvedPlanPrice = defaultPlan.priceOverrides?.[currentFranchise.id] !== undefined
-    ? defaultPlan.priceOverrides[currentFranchise.id]
-    : defaultPlan.price;
+  const resolvedPlanPrice =
+    defaultPlan.priceOverrides?.[currentFranchise.id] !== undefined
+      ? defaultPlan.priceOverrides[currentFranchise.id]
+      : defaultPlan.price;
 
   const discount = computeDiscount(appliedCoupon, resolvedPlanPrice);
   const finalPlanPrice = Math.max(0, resolvedPlanPrice - discount);
@@ -1036,7 +1772,7 @@ function QuickPlanDialog({ open, onOpenChange, plate, onSuccess }: { open: boole
 
   function finalizeSubscription() {
     const cleanPlate = plate.toUpperCase().trim();
-    
+
     // Add subscriber
     const newSub = {
       id: `s-${Math.floor(100 + Math.random() * 900)}`,
@@ -1050,11 +1786,17 @@ function QuickPlanDialog({ open, onOpenChange, plate, onSuccess }: { open: boole
       since: new Date().toISOString().split("T")[0],
       franchiseId: currentFranchise.id,
     };
-    
+
     // Check if client exists
-    const existingClient = clients.find(c => c.plates?.some(p => p.toUpperCase() === cleanPlate) || c.plate.toUpperCase() === cleanPlate);
+    const existingClient = clients.find(
+      (c) =>
+        c.plates?.some((p) => p.toUpperCase() === cleanPlate) ||
+        c.plate?.toUpperCase() === cleanPlate,
+    );
     if (existingClient) {
-      setClients(prev => prev.map(c => c.id === existingClient.id ? { ...c, isSubscriber: true } : c));
+      setClients((prev) =>
+        prev.map((c) => (c.id === existingClient.id ? { ...c, isSubscriber: true } : c)),
+      );
     } else {
       const newClient = {
         id: `c-${Math.floor(100 + Math.random() * 900)}`,
@@ -1067,12 +1809,12 @@ function QuickPlanDialog({ open, onOpenChange, plate, onSuccess }: { open: boole
         totalSpent: 0,
         isSubscriber: true,
       };
-      setClients(prev => [...prev, newClient]);
+      setClients((prev) => [...prev, newClient]);
     }
-    
-    setSubscribers(prev => [...prev, newSub]);
+
+    setSubscribers((prev) => [...prev, newSub]);
     toast.success(`Assinatura criada com sucesso!`);
-    
+
     // Reset internal state but do not call onOpenChange directly, let onSuccess handle it
     setTimeout(() => {
       setStep("form");
@@ -1090,129 +1832,225 @@ function QuickPlanDialog({ open, onOpenChange, plate, onSuccess }: { open: boole
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); else onOpenChange(v); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) reset();
+        else onOpenChange(v);
+      }}
+    >
       <DialogContent className="max-w-lg">
         {step === "form" ? (
           <>
             <DialogHeader>
               <DialogTitle>Venda rápida de assinatura</DialogTitle>
-              <DialogDescription>Plano {defaultPlan.name || "Lava Thru"} — {formatBRL(resolvedPlanPrice)} / mês, {defaultPlan.lavagesIncluded} lavagens inclusas</DialogDescription>
+              <DialogDescription>
+                Plano {defaultPlan.name || "Lava Thru"} — {formatBRL(resolvedPlanPrice)} / mês,{" "}
+                {defaultPlan.lavagesIncluded} lavagens inclusas
+              </DialogDescription>
             </DialogHeader>
-            <Tabs value={docType} onValueChange={(v) => { setDocType(v as "cpf" | "cnpj"); setPayment(v === "cpf" ? "Cartão" : "PIX"); }}>
-          <TabsList className="grid grid-cols-2 w-full">
-            <TabsTrigger value="cpf">CPF (Pessoa Física)</TabsTrigger>
-            <TabsTrigger value="cnpj">CNPJ (Empresa)</TabsTrigger>
-          </TabsList>
-          <TabsContent value="cpf" className="space-y-3 pt-3">
-            <div><Label>Nome completo</Label><Input value={name} onChange={e => setName(e.target.value)} placeholder="Nome do titular" /></div>
-            <div><Label>CPF</Label><Input value={cpf} onChange={e => setCpf(e.target.value)} placeholder="000.000.000-00" /></div>
-            <div><Label>Telefone</Label><Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="(00) 00000-0000" /></div>
-            <div><Label>Email</Label><Input value={email} onChange={e => setEmail(e.target.value)} placeholder="email@exemplo.com" /></div>
-            <div><Label>Placa</Label><Input disabled value={plate} placeholder="ABC1D23" /></div>
-          </TabsContent>
-          <TabsContent value="cnpj" className="space-y-3 pt-3">
-            <div><Label>Razão social</Label><Input value={name} onChange={e => setName(e.target.value)} placeholder="Empresa LTDA" /></div>
-            <div><Label>CNPJ</Label><Input value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="00.000.000/0000-00" /></div>
-            <div><Label>Telefone</Label><Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="(00) 00000-0000" /></div>
-            <div><Label>Email</Label><Input value={email} onChange={e => setEmail(e.target.value)} placeholder="contato@empresa.com" /></div>
-            <div><Label>Placa (opcional para frota)</Label><Input disabled value={plate} placeholder="ABC1D23" /></div>
-          </TabsContent>
-        </Tabs>
-        <div>
-          <Label>Forma de pagamento</Label>
-          <RadioGroup value={payment} onValueChange={(v) => setPayment(v as typeof payment)} className={`grid grid-cols-${availablePayments.length} gap-2 mt-1.5`}>
-            {availablePayments.map((p) => (
-              <label key={p} className={`flex items-center justify-center rounded-lg border-2 p-2 cursor-pointer text-sm font-medium ${payment === p ? "border-brand bg-brand/5" : "border-border"}`}>
-                <RadioGroupItem value={p} className="sr-only" />{p}
-              </label>
-            ))}
-          </RadioGroup>
-        </div>
+            <Tabs
+              value={docType}
+              onValueChange={(v) => {
+                setDocType(v as "cpf" | "cnpj");
+                setPayment(v === "cpf" ? "Cartão" : "PIX");
+              }}
+            >
+              <TabsList className="grid grid-cols-2 w-full">
+                <TabsTrigger value="cpf">CPF (Pessoa Física)</TabsTrigger>
+                <TabsTrigger value="cnpj">CNPJ (Empresa)</TabsTrigger>
+              </TabsList>
+              <TabsContent value="cpf" className="space-y-3 pt-3">
+                <div>
+                  <Label>Nome completo</Label>
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Nome do titular"
+                  />
+                </div>
+                <div>
+                  <Label>CPF</Label>
+                  <Input
+                    value={cpf}
+                    onChange={(e) => setCpf(e.target.value)}
+                    placeholder="000.000.000-00"
+                  />
+                </div>
+                <div>
+                  <Label>Telefone</Label>
+                  <Input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="(00) 00000-0000"
+                  />
+                </div>
+                <div>
+                  <Label>Email</Label>
+                  <Input
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="email@exemplo.com"
+                  />
+                </div>
+                <div>
+                  <Label>Placa</Label>
+                  <Input disabled value={plate} placeholder="ABC1D23" />
+                </div>
+              </TabsContent>
+              <TabsContent value="cnpj" className="space-y-3 pt-3">
+                <div>
+                  <Label>Razão social</Label>
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Empresa LTDA"
+                  />
+                </div>
+                <div>
+                  <Label>CNPJ</Label>
+                  <Input
+                    value={cnpj}
+                    onChange={(e) => setCnpj(e.target.value)}
+                    placeholder="00.000.000/0000-00"
+                  />
+                </div>
+                <div>
+                  <Label>Telefone</Label>
+                  <Input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="(00) 00000-0000"
+                  />
+                </div>
+                <div>
+                  <Label>Email</Label>
+                  <Input
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="contato@empresa.com"
+                  />
+                </div>
+                <div>
+                  <Label>Placa (opcional para frota)</Label>
+                  <Input disabled value={plate} placeholder="ABC1D23" />
+                </div>
+              </TabsContent>
+            </Tabs>
+            <div>
+              <Label>Forma de pagamento</Label>
+              <RadioGroup
+                value={payment}
+                onValueChange={(v) => setPayment(v as typeof payment)}
+                className={`grid grid-cols-${availablePayments.length} gap-2 mt-1.5`}
+              >
+                {availablePayments.map((p) => (
+                  <label
+                    key={p}
+                    className={`flex items-center justify-center rounded-lg border-2 p-2 cursor-pointer text-sm font-medium ${payment === p ? "border-brand bg-brand/5" : "border-border"}`}
+                  >
+                    <RadioGroupItem value={p} className="sr-only" />
+                    {p}
+                  </label>
+                ))}
+              </RadioGroup>
+            </div>
 
-        {/* Coupon field */}
-        <div>
-          <Label className="mb-1.5 block">Cupom de desconto</Label>
-          <CouponInput
-            franchiseId={currentFranchise.id}
-            coupons={coupons}
-            appliedCoupon={appliedCoupon}
-            onApply={setAppliedCoupon}
-            onClear={() => setAppliedCoupon(null)}
-            allowedTargets={["Plano", "Todos"]}
-          />
-        </div>
+            {/* Coupon field */}
+            <div>
+              <Label className="mb-1.5 block">Cupom de desconto</Label>
+              <CouponInput
+                franchiseId={currentFranchise.id}
+                coupons={coupons}
+                appliedCoupon={appliedCoupon}
+                onApply={setAppliedCoupon}
+                onClear={() => setAppliedCoupon(null)}
+                allowedTargets={["Plano", "Todos"]}
+              />
+            </div>
 
-        {/* Price breakdown */}
-        <div className="space-y-1">
-          {appliedCoupon && (
-            <div className="flex items-center justify-between px-3 text-sm text-muted-foreground">
-              <span>Subtotal mensal</span>
-              <span>{formatBRL(resolvedPlanPrice)}</span>
+            {/* Price breakdown */}
+            <div className="space-y-1">
+              {appliedCoupon && (
+                <div className="flex items-center justify-between px-3 text-sm text-muted-foreground">
+                  <span>Subtotal mensal</span>
+                  <span>{formatBRL(resolvedPlanPrice)}</span>
+                </div>
+              )}
+              {appliedCoupon && (
+                <div className="flex items-center justify-between px-3 text-sm text-success font-medium">
+                  <span>Desconto ({appliedCoupon.code})</span>
+                  <span>− {formatBRL(discount)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between rounded-lg bg-muted p-3">
+                <span className="text-sm">Total mensal</span>
+                <span className="text-xl font-bold">{formatBRL(finalPlanPrice)}</span>
+              </div>
+              {profile === "franqueado" && (
+                <div className="flex justify-between items-center px-3 text-[11px] text-muted-foreground">
+                  <span>Taxa de Franquia (Royalties {currentFranchise.royaltyFeePercent}%)</span>
+                  <span className="font-semibold">
+                    {formatBRL(finalPlanPrice * (currentFranchise.royaltyFeePercent / 100))}
+                  </span>
+                </div>
+              )}
             </div>
-          )}
-          {appliedCoupon && (
-            <div className="flex items-center justify-between px-3 text-sm text-success font-medium">
-              <span>Desconto ({appliedCoupon.code})</span>
-              <span>− {formatBRL(discount)}</span>
-            </div>
-          )}
-          <div className="flex items-center justify-between rounded-lg bg-muted p-3">
-            <span className="text-sm">Total mensal</span>
-            <span className="text-xl font-bold">{formatBRL(finalPlanPrice)}</span>
-          </div>
-          {profile === "franqueado" && (
-            <div className="flex justify-between items-center px-3 text-[11px] text-muted-foreground">
-              <span>Taxa de Franquia (Royalties {currentFranchise.royaltyFeePercent}%)</span>
-              <span className="font-semibold">{formatBRL(finalPlanPrice * (currentFranchise.royaltyFeePercent / 100))}</span>
-            </div>
-          )}
-        </div>
 
-        <DialogFooter className="mt-4">
-          <Button variant="outline" onClick={reset}>Cancelar</Button>
-          <Button onClick={confirm} className="bg-brand text-brand-foreground hover:opacity-90">
-            {payment === "Cartão" ? "Avançar para Pagamento" : "Criar assinatura"}
-          </Button>
-        </DialogFooter>
-      </>
-    ) : (
-      <>
-        <DialogHeader>
-          <DialogTitle>Pagamento de Recorrência</DialogTitle>
-          <DialogDescription>Insira os dados do cartão de crédito para a assinatura recorrente.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-4">
-          <div className="flex justify-center pb-2">
-            <CreditCard className="h-12 w-12 text-brand" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Número do Cartão</Label>
-            <Input placeholder="0000 0000 0000 0000" />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Validade</Label>
-              <Input placeholder="MM/AA" />
+            <DialogFooter className="mt-4">
+              <Button variant="outline" onClick={reset}>
+                Cancelar
+              </Button>
+              <Button onClick={confirm} className="bg-brand text-brand-foreground hover:opacity-90">
+                {payment === "Cartão" ? "Avançar para Pagamento" : "Criar assinatura"}
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Pagamento de Recorrência</DialogTitle>
+              <DialogDescription>
+                Insira os dados do cartão de crédito para a assinatura recorrente.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="flex justify-center pb-2">
+                <CreditCard className="h-12 w-12 text-brand" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Número do Cartão</Label>
+                <Input placeholder="0000 0000 0000 0000" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Validade</Label>
+                  <Input placeholder="MM/AA" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>CVC</Label>
+                  <Input placeholder="123" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Nome Impresso</Label>
+                <Input placeholder="NOME DO TITULAR" />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>CVC</Label>
-              <Input placeholder="123" />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Nome Impresso</Label>
-            <Input placeholder="NOME DO TITULAR" />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setStep("form")}>Voltar</Button>
-          <Button onClick={finalizeSubscription} className="bg-success text-success-foreground hover:opacity-90">
-            Aprovar Pagamento
-          </Button>
-        </DialogFooter>
-      </>
-    )}
-  </DialogContent>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setStep("form")}>
+                Voltar
+              </Button>
+              <Button
+                onClick={finalizeSubscription}
+                className="bg-success text-success-foreground hover:opacity-90"
+              >
+                Aprovar Pagamento
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
     </Dialog>
   );
 }
@@ -1220,11 +2058,22 @@ function QuickPlanDialog({ open, onOpenChange, plate, onSuccess }: { open: boole
 function QrCodeSvg() {
   const cells = 21;
   const seed = "lava-thru-pix-mock";
-  const bits = Array.from({ length: cells * cells }, (_, i) => (seed.charCodeAt(i % seed.length) + i) % 3 === 0);
+  const bits = Array.from(
+    { length: cells * cells },
+    (_, i) => (seed.charCodeAt(i % seed.length) + i) % 3 === 0,
+  );
   return (
     <svg width="180" height="180" viewBox={`0 0 ${cells} ${cells}`}>
-      {bits.map((on, i) => on ? <rect key={i} x={i % cells} y={Math.floor(i / cells)} width="1" height="1" fill="black" /> : null)}
-      {[[0, 0], [cells - 7, 0], [0, cells - 7]].map(([x, y], i) => (
+      {bits.map((on, i) =>
+        on ? (
+          <rect key={i} x={i % cells} y={Math.floor(i / cells)} width="1" height="1" fill="black" />
+        ) : null,
+      )}
+      {[
+        [0, 0],
+        [cells - 7, 0],
+        [0, cells - 7],
+      ].map(([x, y], i) => (
         <g key={i}>
           <rect x={x} y={y} width="7" height="7" fill="black" />
           <rect x={x + 1} y={y + 1} width="5" height="5" fill="white" />

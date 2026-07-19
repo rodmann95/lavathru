@@ -5,13 +5,35 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
-  Plus, Search, CreditCard, Sparkles, Settings2, RefreshCw, DollarSign, Percent, Pencil, Trash2, LineChart,
+  Plus,
+  Search,
+  CreditCard,
+  Sparkles,
+  Settings2,
+  RefreshCw,
+  DollarSign,
+  Percent,
+  Pencil,
+  Trash2,
+  LineChart,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "@/lib/app-context";
@@ -30,6 +52,8 @@ type FormState = {
   description: string;
   royaltyPercent: string;
   costCenterId: string;
+  targetAudience: "PF" | "PJ" | "Ambos";
+  showOnWebsite: boolean;
 };
 
 const EMPTY_FORM: FormState = {
@@ -39,6 +63,8 @@ const EMPTY_FORM: FormState = {
   description: "",
   royaltyPercent: "10",
   costCenterId: "cc-002",
+  targetAudience: "Ambos",
+  showOnWebsite: true,
 };
 
 function PlanosPage() {
@@ -88,6 +114,8 @@ function PlanosPage() {
       description: plan.description,
       royaltyPercent: plan.royaltyPercent?.toString() ?? "10",
       costCenterId: plan.costCenterId || "cc-002",
+      targetAudience: plan.targetAudience ?? "Ambos",
+      showOnWebsite: plan.showOnWebsite ?? true,
     });
     setDialogOpen(true);
   }
@@ -124,9 +152,11 @@ function PlanosPage() {
                 description: form.description,
                 royaltyPercent: parsedRoyalty,
                 costCenterId: form.costCenterId,
+                targetAudience: form.targetAudience,
+                showOnWebsite: form.showOnWebsite,
               }
-            : p
-        )
+            : p,
+        ),
       );
       toast.success(`Plano "${form.name}" atualizado!`);
     } else {
@@ -138,6 +168,8 @@ function PlanosPage() {
         description: form.description,
         royaltyPercent: parsedRoyalty,
         costCenterId: form.costCenterId,
+        targetAudience: form.targetAudience,
+        showOnWebsite: form.showOnWebsite,
         priceOverrides: {},
       };
       setPlans((prev) => [...prev, newPlan]);
@@ -156,9 +188,16 @@ function PlanosPage() {
 
   // ─── Price Override ──────────────────────────────────────────────────────────
 
-  function handleOpenCustomize(planId: string, planName: string, basePrice: number, currentOverride?: number) {
+  function handleOpenCustomize(
+    planId: string,
+    planName: string,
+    basePrice: number,
+    currentOverride?: number,
+  ) {
     setOverridePlan({ id: planId, name: planName, basePrice, currentOverride });
-    setOverridePriceInput(currentOverride !== undefined ? currentOverride.toString() : basePrice.toString());
+    setOverridePriceInput(
+      currentOverride !== undefined ? currentOverride.toString() : basePrice.toString(),
+    );
   }
 
   function handleSaveOverride() {
@@ -176,7 +215,7 @@ function PlanosPage() {
           return { ...p, priceOverrides: overrides };
         }
         return p;
-      })
+      }),
     );
     toast.success(`Mensalidade de "${overridePlan.name}" customizada!`);
     setOverridePlan(null);
@@ -192,7 +231,7 @@ function PlanosPage() {
           return { ...p, priceOverrides: overrides };
         }
         return p;
-      })
+      }),
     );
     toast.success(`Mensalidade de "${overridePlan.name}" redefinida para o padrão.`);
     setOverridePlan(null);
@@ -214,11 +253,15 @@ function PlanosPage() {
         <div className="flex items-center gap-2">
           <Label className="text-sm font-medium whitespace-nowrap">Configurando para:</Label>
           <Select value={selectedFranchiseId} onValueChange={setSelectedFranchiseId}>
-            <SelectTrigger className="w-[280px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[280px]">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="global">Todas as Franquias (Padrão)</SelectItem>
               {franchises.map((f) => (
-                <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                <SelectItem key={f.id} value={f.id}>
+                  {f.name}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -264,7 +307,7 @@ function PlanosPage() {
                       {p.costCenterId && (
                         <Badge variant="secondary" className="font-normal gap-1 text-[10px]">
                           <LineChart className="h-3 w-3" />
-                          {costCenters.find(c => c.id === p.costCenterId)?.name || p.costCenterId}
+                          {costCenters.find((c) => c.id === p.costCenterId)?.name || p.costCenterId}
                         </Badge>
                       )}
                     </div>
@@ -279,14 +322,20 @@ function PlanosPage() {
                 {/* Price */}
                 <div className="pt-1 flex items-end justify-between gap-2">
                   <div>
-                    <span className="text-2xl font-black font-mono">{formatBRL(effectivePrice)}</span>
+                    <span className="text-2xl font-black font-mono">
+                      {formatBRL(effectivePrice)}
+                    </span>
                     <span className="text-xs text-muted-foreground"> /mês</span>
                     {selectedFranchiseId !== "global" && (
                       <div className="mt-0.5">
                         {hasOverride ? (
-                          <Badge className="bg-amber-500/10 text-amber-600 border-amber-300 text-[10px]">Customizado</Badge>
+                          <Badge className="bg-amber-500/10 text-amber-600 border-amber-300 text-[10px]">
+                            Customizado
+                          </Badge>
                         ) : (
-                          <Badge variant="outline" className="text-[10px]">Padrão</Badge>
+                          <Badge variant="outline" className="text-[10px]">
+                            Padrão
+                          </Badge>
                         )}
                       </div>
                     )}
@@ -346,7 +395,14 @@ function PlanosPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleOpenCustomize(p.id, p.name, p.price, p.priceOverrides?.[selectedFranchiseId])}
+                    onClick={() =>
+                      handleOpenCustomize(
+                        p.id,
+                        p.name,
+                        p.price,
+                        p.priceOverrides?.[selectedFranchiseId],
+                      )
+                    }
                     className="gap-1 w-full h-8"
                   >
                     <Settings2 className="h-3.5 w-3.5" /> Customizar Mensalidade
@@ -368,7 +424,9 @@ function PlanosPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{editTarget ? `Editar: ${editTarget.name}` : "Novo Plano de Assinatura"}</DialogTitle>
+            <DialogTitle>
+              {editTarget ? `Editar: ${editTarget.name}` : "Novo Plano de Assinatura"}
+            </DialogTitle>
             <DialogDescription>
               {editTarget
                 ? "Atualize as configurações do plano."
@@ -448,16 +506,57 @@ function PlanosPage() {
             {/* Cost Center */}
             <div className="space-y-1.5">
               <Label>Centro de Custo de Receita *</Label>
-              <Select value={form.costCenterId} onValueChange={(v) => setForm(f => ({ ...f, costCenterId: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select
+                value={form.costCenterId}
+                onValueChange={(v) => setForm((f) => ({ ...f, costCenterId: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   {costCenters
-                    .filter(c => c.type === "receita" || c.type === "ambos")
-                    .map(cc => (
-                      <SelectItem key={cc.id} value={cc.id}>{cc.name}</SelectItem>
-                  ))}
+                    .filter((c) => c.type === "receita" || c.type === "ambos")
+                    .map((cc) => (
+                      <SelectItem key={cc.id} value={cc.id}>
+                        {cc.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Target Audience & Website */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Público-Alvo</Label>
+                <Select
+                  value={form.targetAudience}
+                  onValueChange={(v: "PF" | "PJ" | "Ambos") =>
+                    setForm((f) => ({ ...f, targetAudience: v }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Ambos">Ambos (PF e PJ)</SelectItem>
+                    <SelectItem value="PF">Pessoa Física (PF)</SelectItem>
+                    <SelectItem value="PJ">Pessoa Jurídica (PJ)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5 flex flex-col justify-end">
+                <div className="flex items-center gap-2 mb-2">
+                  <Switch
+                    id="pl-site"
+                    checked={form.showOnWebsite}
+                    onCheckedChange={(v) => setForm((f) => ({ ...f, showOnWebsite: v }))}
+                  />
+                  <Label htmlFor="pl-site" className="font-normal cursor-pointer text-sm">
+                    Exibir no Site
+                  </Label>
+                </div>
+              </div>
             </div>
 
             {/* Split preview */}
@@ -466,21 +565,30 @@ function PlanosPage() {
                 <div className="flex justify-between">
                   <span>Franqueado recebe por assinatura</span>
                   <span className="font-semibold text-foreground">
-                    {formatBRL(parseFloat(form.price) * (1 - parseFloat(form.royaltyPercent || "0") / 100))}
+                    {formatBRL(
+                      parseFloat(form.price) * (1 - parseFloat(form.royaltyPercent || "0") / 100),
+                    )}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Royalties para a Matriz</span>
                   <span className="font-semibold text-brand">
-                    {formatBRL(parseFloat(form.price) * (parseFloat(form.royaltyPercent || "0") / 100))}
+                    {formatBRL(
+                      parseFloat(form.price) * (parseFloat(form.royaltyPercent || "0") / 100),
+                    )}
                   </span>
                 </div>
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} className="bg-brand text-brand-foreground hover:opacity-90">
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSave}
+              className="bg-brand text-brand-foreground hover:opacity-90"
+            >
               {editTarget ? "Salvar alterações" : "Registrar Plano"}
             </Button>
           </DialogFooter>
@@ -498,7 +606,9 @@ function PlanosPage() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => setDeleteId(null)}>
+              Cancelar
+            </Button>
             <Button variant="destructive" onClick={() => deleteId && handleDelete(deleteId)}>
               Excluir
             </Button>
@@ -552,8 +662,13 @@ function PlanosPage() {
                     <RefreshCw className="h-3.5 w-3.5" /> Redefinir para Padrão
                   </Button>
                 )}
-                <Button variant="outline" onClick={() => setOverridePlan(null)}>Cancelar</Button>
-                <Button onClick={handleSaveOverride} className="bg-brand text-brand-foreground hover:opacity-90">
+                <Button variant="outline" onClick={() => setOverridePlan(null)}>
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleSaveOverride}
+                  className="bg-brand text-brand-foreground hover:opacity-90"
+                >
                   Salvar Mensalidade
                 </Button>
               </DialogFooter>
